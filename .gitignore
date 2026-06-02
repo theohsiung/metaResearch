@@ -1,0 +1,55 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- matplotlib font/config cache only (NOT experiment heatmaps) ---
+.matplotlib/
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# --- Secrets ---
+.env
+
+# ---------------------------------------------------------------------------
+# DO NOT ignore the experience ledger. Per the Meta-Harness methodology and
+# DESIGN.md, git is an APPEND-ONLY experience store: every evaluated candidate
+# (kept, dominated, infeasible, or crashed) and all of its diagnostic traces are
+# tracked on purpose. These are NOT generated artifacts to be discarded.
+#
+# The experience bundles, the Pareto frontier, and the flat ledger are tracked:
+#   !experience/
+#   !results.tsv
+#   !frontier.json
+# The heatmaps and raw fields inside them are the diagnostics the agent reads
+# back to close the loop -- they must stay in version control.
+# ---------------------------------------------------------------------------
+!experience/
+!experience/**
+!results.tsv
+!frontier.json

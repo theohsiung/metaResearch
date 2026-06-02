@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meta-research"
+version = "0.1.0"
+description = "A generalized autoresearch architecture carrying the Meta-Harness methodology, shipped as a skill: an agent-run, configuration-as-code, git-append-only design-optimization loop with a pluggable Evaluator."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = [
+    "autoresearch",
+    "meta-harness",
+    "design-optimization",
+    "pareto",
+    "agent",
+    "configuration-as-code",
+]
+authors = [{ name = "meta-research" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy",
+    "matplotlib",
+]
+
+[project.optional-dependencies]
+# Loading and calling user-provided surrogate model artifacts.
+surrogate = ["joblib", "onnxruntime"]
+# REST-mode ApiSolverEvaluator (CLI mode and basic REST work with the stdlib alone).
+api = ["requests"]
+# Test + lint tooling.
+dev = ["pytest"]
+
+[project.scripts]
+meta-research = "meta_research.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["meta_research*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: individual functions and pure logic",
+    "integration: runner / experience / git plumbing end-to-end",
+]
