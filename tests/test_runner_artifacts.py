@@ -54,3 +54,44 @@ def test_returned_artifact_resolves_to_existing_bundle_file(tmp_path: Path) -> N
     assert "experience" in rel and "trace" in rel
     resolved = tmp_path / rel
     assert resolved.is_file(), f"artifact path does not resolve to a file: {resolved}"
+
+
+def _statuses(run_dir: Path) -> dict[str, str]:
+    """Read each bundle's stored status from result.json + hypothesis.md."""
+    import json as _json
+    import re as _re
+
+    out: dict[str, str] = {}
+    for b in sorted((run_dir / "experience").iterdir()):
+        name = b.name.split("_", 1)[1]
+        rj = _json.loads((b / "result.json").read_text())
+        hm = (b / "hypothesis.md").read_text()
+        m = _re.search(r"^status:\s*(.+)$", hm, _re.M)
+        out[name] = (rj.get("status"), m.group(1).strip() if m else None)
+    return out
+
+
+def test_bundle_status_reflects_frontier_membership_at_eval_time(tmp_path: Path) -> None:
+    """A frontier-advancing design records status 'frontier'; a dominated one 'dominated'.
+
+    Regression: the bundle previously always stored 'dominated' because the runner
+    never passed the classified status into record().
+    """
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    designs = tmp_path / "designs"
+    designs.mkdir()
+    (designs / "__init__.py").write_text("", encoding="utf-8")
+    for mod, x in (("d_good", 3.0), ("d_bad", 5.0)):  # lower cost is better (min)
+        (designs / f"{mod}.py").write_text(
+            "from meta_research.interfaces import DesignSpec\n"
+            f"def build():\n    return DesignSpec(params={{'x': {x}}})\n",
+            encoding="utf-8",
+        )
+    exp = _Experiment(str(designs))
+    # Evaluate the better design first -> frontier; then the worse -> dominated at eval time.
+    evaluate_and_record("d_good", exp, tmp_path, commit=False)
+    evaluate_and_record("d_bad", exp, tmp_path, commit=False)
+
+    st = _statuses(tmp_path)
+    assert st["d_good"] == ("frontier", "frontier"), st
+    assert st["d_bad"] == ("dominated", "dominated"), st

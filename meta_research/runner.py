@@ -30,7 +30,7 @@ from typing import Any, Protocol
 
 from .candidates import build_design, validate_candidate
 from .experience import Experience
-from .frontier import classify, update_frontier
+from .frontier import classify, load_frontier, update_frontier
 from .interfaces import DesignSpec, EvalResult, Objective, replace
 from .logfmt import ResultsLog
 
@@ -250,11 +250,26 @@ def _finalize(
     commit: bool,
     tag: str | None,
 ) -> EvalResult:
-    """Record -> frontier -> classify -> tsv -> (opt) commit. Shared tail for all paths."""
-    # 3. Record the experience bundle (design source, spec, hypothesis, result, traces).
+    """Classify -> record -> frontier -> tsv -> (opt) commit. Shared tail for all paths."""
+    # 3. Resolve the status BEFORE recording, so the stored bundle (result.json +
+    #    hypothesis.md) carries it. Classify against the frontier as it stands
+    #    *before* this candidate: a candidate is "frontier" iff no existing frontier
+    #    member dominates it (dominance is transitive, so the pre-existing frontier
+    #    is sufficient). This is status-at-eval-time — consistent with the
+    #    append-only ledger, which never rewrites a past bundle.
+    if result.feasible and result.ok:
+        try:
+            prev_pareto = load_frontier(run_dir).get("pareto", [])
+            label = classify(result.scores, prev_pareto, objectives)
+        except Exception:  # noqa: BLE001
+            label = "dominated"
+    else:
+        label = "dominated"
+    status = _status_for(result, label)
+
+    # 4. Record the experience bundle with the resolved status folded in.
     src_path = _design_src_path(designs_dir, name)
     design_src_path = src_path if src_path.is_file() else None
-
     bundle = experience.bundle_dir(iteration, name)
     try:
         experience.record(
@@ -263,7 +278,7 @@ def _finalize(
             design_src_path=design_src_path,
             design=design,
             result=result,
-            hypothesis=hypothesis or {},
+            hypothesis={**(hypothesis or {}), "status": status},
         )
     except Exception as exc:  # noqa: BLE001 — never lose the result over a store hiccup
         # Best-effort: ensure the source is at least copied so the trace is not empty.
@@ -272,35 +287,24 @@ def _finalize(
     else:
         # Point the returned result's artifacts at their real ledger location
         # (the bundle's trace/), so callers/the CLI resolve a path that exists
-        # instead of the evaluator's bare basename. This is what closes the loop:
-        # the agent is told to re-Read the heatmap, so the path must be correct.
+        # instead of the evaluator's bare basename. This closes the loop: the agent
+        # is told to re-Read the heatmap, so the path must be correct.
         result = _relocate_artifacts(result, bundle, run_dir)
 
-    # 4. Recompute the Pareto frontier from the full ledger, then label this candidate.
-    frontier_rows: list[dict[str, Any]] = []
+    # 5. Recompute and persist the full Pareto frontier (now including this candidate).
     try:
-        frontier = update_frontier(run_dir, objectives)
-        frontier_rows = list(frontier.get("pareto", []))
+        update_frontier(run_dir, objectives)
     except Exception as exc:  # noqa: BLE001 — frontier maths must not sink the step
         result = _attach_metadata(result, {"frontier_error": repr(exc)})
 
-    if result.feasible and result.ok:
-        try:
-            label = classify(result.scores, frontier_rows, objectives)
-        except Exception:  # noqa: BLE001
-            label = "dominated"
-    else:
-        label = "dominated"
-    status = _status_for(result, label)
-
-    # 5. Append a results.tsv row (header written lazily by ResultsLog).
+    # 6. Append a results.tsv row (header written lazily by ResultsLog).
     hyp_summary = _hypothesis_summary(hypothesis)
     log = ResultsLog(run_dir / "results.tsv", objectives)
     if not (run_dir / "results.tsv").exists():
         log.write_header()
     log.append(iteration, name, status, result, hyp_summary)
 
-    # 6. Append-only git commit (optional). Branch only if a tag was supplied.
+    # 7. Append-only git commit (optional). Branch only if a tag was supplied.
     if commit:
         try:
             if tag:
@@ -312,7 +316,7 @@ def _finalize(
         except Exception as exc:  # noqa: BLE001 — a commit failure must not lose the result
             result = _attach_metadata(result, {"commit_error": repr(exc)})
 
-    # 7. Return the result; the CLI prints scores + heatmap path + frontier verdict.
+    # 8. Return the result; the CLI prints scores + heatmap path + frontier verdict.
     return result
 
 
