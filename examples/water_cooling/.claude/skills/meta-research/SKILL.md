@@ -1,6 +1,6 @@
 ---
 name: meta-research
-description: Autonomous, hypothesis-driven research loop that optimizes a parametric design against a pluggable objective, maintaining a Pareto frontier in git as an append-only experience ledger. Use when doing autonomous design or parameter research, optimizing a design against a simulator/objective/surrogate, when asked to "run meta-research", or when a repo contains prepare.py + designs/ (a meta-research experiment).
+description: Autonomous, hypothesis-driven research loop for engineering/scientific design — it proposes parametric designs, scores each with a pluggable objective (an in-process numerical model, a loaded surrogate model, or a real-simulation API), reads the diagnostics (e.g. heatmaps) back, and maintains a multi-objective Pareto frontier in git as an append-only experience ledger. Use this whenever the user wants to autonomously search or optimize a design or a set of parameters against a simulator/objective/surrogate — especially multi-objective trade-offs, "keep iterating overnight", or mechanism-level (not just parameter-tweak) design improvement — when they ask to "run meta-research", or when the working repo contains a prepare.py + designs/ experiment. This is design/parameter search, not ML model training.
 ---
 
 # meta-research
@@ -15,6 +15,11 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 
 ## Quick start
 
+0. Confirm the engine is available: `meta-research --help`. If the command is not
+   found, install it once with `pip install -e <repo-root>`, or substitute
+   `python -m meta_research.cli` everywhere this skill writes `meta-research`. The
+   framework supplies the deterministic tools (`eval`/`seed`/`frontier`); you supply
+   the research.
 1. Read `program.md` (the domain "program") and `prepare.py` (OBJECTIVES, BUDGET,
    OPERATING, BASELINES, `make_evaluator()`). These fixed files are **read-only**;
    `designs/<name>.py` is your only write target.
@@ -26,7 +31,8 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 ## The loop (checklist — repeat every iteration)
 
 1. **Inspect experience** (never skip): run `meta-research frontier`, read
-   `results.tsv`, run `git log --oneline`. Then **`Read` the actual `heatmap.png`**
+   `results.tsv`, run `git log --oneline`, and `meta-research progress` to refresh the
+   best-so-far curves + Pareto plot. Then **`Read` the actual `heatmap.png`**
    (or whatever diagnostic the evaluator emits) AND the `hypothesis.md` of the
    frontier members, the most recent candidates, and the failures. Use
    `git show <sha>:experience/<dir>/design.py` to read prior source. The diagnostic

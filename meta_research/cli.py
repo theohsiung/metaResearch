@@ -7,7 +7,8 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research eval <design> [--commit] [--run-dir DIR] [--hypothesis FILE]
     meta-research seed [--commit] [--run-dir DIR]
     meta-research frontier [--run-dir DIR]
-    meta-research init <name> [--run-dir DIR]
+    meta-research progress [--out DIR] [--run-dir DIR]
+    meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
 The experiment is discovered from the working directory (autoresearch style):
 ``./prepare.py`` is loaded via :mod:`importlib`, its ``DESIGNS_DIR`` is resolved
@@ -19,6 +20,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -269,25 +272,159 @@ def cmd_frontier(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_progress(args: argparse.Namespace) -> int:
+    """`meta-research progress` — plot best-so-far curves + Pareto evolution (DESIGN §6.5).
+
+    The autoresearch ``progress.png`` analog. Reads the append-only ledger only.
+    """
+    run_dir = Path(args.run_dir).resolve()
+    try:
+        experiment = load_experiment(run_dir)
+    except (FileNotFoundError, ImportError, AttributeError, ValueError) as exc:
+        _err(str(exc))
+        return 2
+
+    out_dir = Path(args.out).resolve() if args.out else run_dir
+    # Lazy import: keep matplotlib out of the hot path for eval/seed/frontier.
+    from .progress import plot_progress
+
+    written = plot_progress(run_dir, list(experiment.OBJECTIVES), out_dir=out_dir)
+    if not written:
+        _err("no experience bundles yet — run `meta-research seed` first")
+        return 1
+    print(logfmt.bold(f"wrote {len(written)} progress plot(s):"))
+    for p in written:
+        print(f"  {logfmt.cyan(str(p))}")
+    return 0
+
+
+# --- init: locating the shipped skill + examples (works in an editable install) ---
+
+#: Generated/scratch paths never copied when scaffolding `--from <example>`.
+_EXAMPLE_IGNORE = shutil.ignore_patterns(
+    "__pycache__", "*.pyc", ".git", "experience", "runs",
+    "results.tsv", "frontier.json", "*.png", "*.npz",
+)
+_GITIGNORE_STUB = "__pycache__/\n*.pyc\n.venv/\n"
+
+
+def _repo_root() -> Path:
+    """Repo root that ships ``skills/`` and ``examples/`` (one level above the package).
+
+    Resolves correctly for an editable install (``pip install -e``), where this
+    file lives at ``<repo>/meta_research/cli.py``.
+    """
+    return Path(__file__).resolve().parent.parent
+
+
+def _packaged_skill_dir() -> Path | None:
+    d = _repo_root() / "skills" / "meta-research"
+    return d if d.is_dir() else None
+
+
+def _examples_root() -> Path:
+    return _repo_root() / "examples"
+
+
+def _list_examples() -> list[str]:
+    root = _examples_root()
+    if not root.is_dir():
+        return []
+    return sorted(p.name for p in root.iterdir() if (p / "prepare.py").is_file())
+
+
+def _copy_skill_into(target: Path) -> bool:
+    """Copy the shipped skill into ``target/.claude/skills/meta-research/``.
+
+    Returns True if copied, False if the skill could not be located (e.g. a
+    non-editable install that did not ship ``skills/``).
+    """
+    skill = _packaged_skill_dir()
+    if skill is None:
+        return False
+    dst = target / ".claude" / "skills" / "meta-research"
+    dst.mkdir(parents=True, exist_ok=True)
+    for fname in ("SKILL.md", "REFERENCE.md"):
+        src = skill / fname
+        if src.is_file():
+            shutil.copyfile(src, dst / fname)
+    return True
+
+
+def _scaffold_stubs(target: Path, name: str) -> None:
+    """Write the bare-stub experiment (generic ``cost`` template)."""
+    designs = target / "designs"
+    designs.mkdir(parents=True)
+    (target / "prepare.py").write_text(_PREPARE_STUB, encoding="utf-8")
+    (target / "program.md").write_text(_PROGRAM_STUB.format(name=name), encoding="utf-8")
+    (designs / "__init__.py").write_text("", encoding="utf-8")
+    (designs / "baseline.py").write_text(_BASELINE_STUB, encoding="utf-8")
+
+
+def _git_init_repo(target: Path, name: str) -> str:
+    """`git init` the experiment + make the initial scaffold commit.
+
+    Ensures a usable identity *local to this repo* when none is configured, so the
+    append-only ledger works out of the box without touching global git config.
+    Best-effort: returns a status string; never raises.
+    """
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args], cwd=str(target), capture_output=True, text=True, check=False
+        )
+
+    if run("init", "-q").returncode != 0:
+        return "git init failed"
+    # Only set a local identity if neither local nor global is configured.
+    if not run("config", "user.email").stdout.strip():
+        run("config", "user.email", "meta-research@localhost")
+        run("config", "user.name", "meta-research")
+    run("add", "-A")
+    commit = run("commit", "-q", "-m", f"meta-research: scaffold {name} experiment")
+    if commit.returncode != 0:
+        return "git init ok, initial commit skipped"
+    return "git initialized + initial commit"
+
+
 def cmd_init(args: argparse.Namespace) -> int:
-    """`meta-research init <name>` — scaffold a thin experiment dir (DESIGN §6.5)."""
+    """`meta-research init <name> [--from EXAMPLE]` — scaffold a ready-to-run experiment.
+
+    Creates ``<run-dir>/<name>/`` with either a bare stub (default) or a copy of a
+    shipped example (``--from water_cooling``), drops the meta-research skill into
+    ``.claude/skills/`` so it loads when Claude Code runs there, and ``git init`` +
+    initial commit so the append-only ledger is live immediately.
+    """
     parent = Path(args.run_dir).resolve()
     target = parent / args.name
     if target.exists():
         _err(f"target already exists: {target}")
         return 2
-    designs = target / "designs"
+
+    from_example = getattr(args, "from_example", None)
     try:
-        designs.mkdir(parents=True)
-        (target / "prepare.py").write_text(_PREPARE_STUB, encoding="utf-8")
-        (target / "program.md").write_text(_PROGRAM_STUB.format(name=args.name), encoding="utf-8")
-        (designs / "__init__.py").write_text("", encoding="utf-8")
-        (designs / "baseline.py").write_text(_BASELINE_STUB, encoding="utf-8")
+        if from_example:
+            src = _examples_root() / from_example
+            if not (src / "prepare.py").is_file():
+                avail = ", ".join(_list_examples()) or "(none found)"
+                _err(f"unknown example {from_example!r}; available: {avail}")
+                return 2
+            shutil.copytree(src, target, ignore=_EXAMPLE_IGNORE)
+        else:
+            _scaffold_stubs(target, args.name)
+        (target / ".gitignore").write_text(_GITIGNORE_STUB, encoding="utf-8")
+        skill_ok = _copy_skill_into(target)
+        git_status = _git_init_repo(target, args.name)
     except OSError as exc:
         _err(f"could not scaffold experiment: {exc}")
         return 1
+
     print(logfmt.green(f"scaffolded experiment at {target}"))
-    print(logfmt.dim("  edit prepare.py (OBJECTIVES, OPERATING, make_evaluator) then `meta-research seed`"))
+    print(logfmt.dim(f"  source: {'example ' + from_example if from_example else 'bare stub'}"))
+    print(logfmt.dim(f"  skill: {'copied into .claude/skills/' if skill_ok else 'NOT FOUND (use a -e install or copy skills/meta-research manually)'}"))
+    print(logfmt.dim(f"  git: {git_status}"))
+    nxt = "review prepare.py, then `meta-research seed`" if from_example else \
+        "edit prepare.py (OBJECTIVES, OPERATING, make_evaluator), then `meta-research seed`"
+    print(logfmt.dim(f"  next: cd {target.name} && {nxt}"))
     return 0
 
 
@@ -326,8 +463,17 @@ def build_parser() -> argparse.ArgumentParser:
     add_run_dir(p_front)
     p_front.set_defaults(func=cmd_frontier)
 
-    p_init = sub.add_parser("init", help="scaffold a new experiment dir")
+    p_prog = sub.add_parser("progress", help="plot best-so-far curves + Pareto evolution (progress.png)")
+    p_prog.add_argument("--out", default=None, help="output dir for PNGs (default: run dir)")
+    add_run_dir(p_prog)
+    p_prog.set_defaults(func=cmd_progress)
+
+    p_init = sub.add_parser("init", help="scaffold a new experiment dir (git + skill ready)")
     p_init.add_argument("name", help="experiment directory name to create")
+    p_init.add_argument(
+        "--from", dest="from_example", default=None, metavar="EXAMPLE",
+        help="scaffold from a shipped example (e.g. water_cooling) instead of bare stubs",
+    )
     add_run_dir(p_init)
     p_init.set_defaults(func=cmd_init)
 

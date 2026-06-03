@@ -43,7 +43,9 @@ Invoke the `meta-research` skill and repeat these steps. **One mechanism change 
 candidate.**
 
 1. **Inspect experience.** `meta-research frontier`; read `results.tsv`;
-   `git log --oneline`. Then actually **`Read` the `heatmap.png`** and `hypothesis.md`
+   `git log --oneline`; `meta-research progress` (regenerates `progress.png` — the
+   best-so-far curve per objective + the Pareto-frontier scatter, autoresearch-style).
+   Then actually **`Read` the `heatmap.png`** and `hypothesis.md`
    of the current frontier designs, the most recent candidates, and any recent failures.
    Use `git show <sha>:experience/<bundle>/design.py` to pull full prior source. The
    heatmap is the diagnostic — look at *where* the plate is hot, not just the number.
