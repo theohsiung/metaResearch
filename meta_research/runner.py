@@ -269,6 +269,12 @@ def _finalize(
         # Best-effort: ensure the source is at least copied so the trace is not empty.
         _safe_copy_source(design_src_path, bundle)
         result = _attach_metadata(result, {"record_error": repr(exc)})
+    else:
+        # Point the returned result's artifacts at their real ledger location
+        # (the bundle's trace/), so callers/the CLI resolve a path that exists
+        # instead of the evaluator's bare basename. This is what closes the loop:
+        # the agent is told to re-Read the heatmap, so the path must be correct.
+        result = _relocate_artifacts(result, bundle, run_dir)
 
     # 4. Recompute the Pareto frontier from the full ledger, then label this candidate.
     frontier_rows: list[dict[str, Any]] = []
@@ -315,6 +321,28 @@ def _attach_metadata(result: EvalResult, extra: dict[str, Any]) -> EvalResult:
     merged = dict(result.metadata)
     merged.update(extra)
     return replace(result, metadata=merged)
+
+
+def _relocate_artifacts(result: EvalResult, bundle: Path, run_dir: Path) -> EvalResult:
+    """Rewrite artifact paths to the persisted bundle ``trace/`` location.
+
+    The evaluator returns bare names (e.g. ``"heatmap.png"``) for files it wrote
+    into its ``out_dir`` (the bundle trace dir). :func:`experience.record` keeps
+    them under ``<bundle>/trace/<name>``. We rewrite to paths *relative to
+    run_dir* when possible (so the ledger is portable) else absolute, so any
+    consumer resolves a path that actually exists.
+    """
+    if not result.artifacts:
+        return result
+    trace = bundle / "trace"
+    relocated: dict[str, str] = {}
+    for key, raw in result.artifacts.items():
+        dest = trace / Path(raw).name
+        try:
+            relocated[key] = str(dest.relative_to(run_dir))
+        except ValueError:
+            relocated[key] = str(dest)
+    return replace(result, artifacts=relocated)
 
 
 def _safe_copy_source(src_path: Path | None, bundle: Path) -> None:
