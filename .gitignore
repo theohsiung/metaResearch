@@ -36,6 +36,9 @@ htmlcov/
 # --- Secrets ---
 .env
 
+# --- Generated deck artifacts (PPT/SVG outputs) ---
+docs/decks/
+
 # ---------------------------------------------------------------------------
 # DO NOT ignore the experience ledger. Per the Meta-Harness methodology and
 # DESIGN.md, git is an APPEND-ONLY experience store: every evaluated candidate
