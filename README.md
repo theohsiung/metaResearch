@@ -170,3 +170,14 @@ interrupted, never `git reset`s, and never declares the frontier "optimal".
 
 See [`DESIGN.md`](./DESIGN.md) for the binding architecture contract and
 [`skills/meta-research/SKILL.md`](./skills/meta-research/SKILL.md) for the loop the agent runs.
+
+## Acknowledgements
+
+This project stands on the shoulders of two prior works whose ideas it directly builds on:
+
+- [karpathy/autoresearch](https://github.com/karpathy/autoresearch) — for the autonomous-research
+  agent ergonomics and the append-only experience-ledger pattern.
+- [stanford-iris-lab/meta-harness](https://github.com/stanford-iris-lab/meta-harness) — for the
+  meta-harness methodology that treats the harness itself as the artifact under optimization.
+
+Huge thanks to the authors and contributors of both projects.
