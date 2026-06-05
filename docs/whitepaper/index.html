@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>meta-research — White Paper / 白皮書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Spectral:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Serif+TC:wght@400;600;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4efe3; --paper2:#efe7d4; --panel:#fbf8f0;
+  --ink:#1a1610; --ink2:#574e3f; --faint:#8a7f6a; --line:#ddd0b6;
+  --cold:#1f4e79; --cool:#3286b3; --warm:#e3a13a; --hot:#cf3a22;
+  --thermal:linear-gradient(90deg,#1f4e79 0%,#3286b3 32%,#e3a13a 70%,#cf3a22 100%);
+  --display:"Fraunces",Georgia,serif;
+  --serif:"Spectral",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --zh:"Noto Serif TC","Spectral",serif;
+  --maxw:820px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--serif);font-size:18px;line-height:1.62;
+  background-image:
+    linear-gradient(var(--line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:34px 34px,34px 34px;background-position:-1px -1px;
+  background-attachment:fixed;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/></svg>");
+}
+.wrap{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:0 26px}
+.zh{font-family:var(--zh);}
+body.lang-en .zh{display:none!important}
+body.lang-zh .en{display:none!important}
+body.lang-both .zh{color:var(--ink2)}
+body.lang-both p.zh, body.lang-both li.zh{
+  border-left:2px solid transparent;border-image:var(--thermal) 1;
+  padding-left:14px;margin-top:-2px;
+}
+.topbar{position:sticky;top:0;z-index:50;background:rgba(244,239,227,.86);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar .inner{max-width:var(--maxw);margin:0 auto;padding:11px 26px;display:flex;
+  align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--mono);font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2)}
+.brand b{color:var(--hot)}
+.toggle{display:flex;border:1px solid var(--ink);border-radius:2px;overflow:hidden}
+.toggle button{font-family:var(--mono);font-size:12px;letter-spacing:.08em;
+  background:transparent;color:var(--ink);border:0;padding:6px 11px;cursor:pointer;border-right:1px solid var(--ink)}
+.toggle button:last-child{border-right:0}
+.toggle button.active{background:var(--ink);color:var(--paper)}
+.hero{padding:60px 0 28px}
+.kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--hot)}
+h1.title{font-family:var(--display);font-weight:900;font-size:clamp(52px,11vw,108px);
+  line-height:.92;margin:.18em 0 .12em;letter-spacing:-.02em}
+h1.title .dash{color:var(--cool)}
+.subtitle{font-family:var(--display);font-weight:400;font-style:italic;font-size:clamp(20px,3.4vw,30px);color:var(--ink2);margin:0 0 22px;max-width:32ch}
+.subtitle .en,.subtitle .zh{display:block}
+.subtitle .zh{font-style:normal;font-size:.82em;margin-top:.3em}
+.thermbar{height:12px;border-radius:6px;background:var(--thermal);box-shadow:0 1px 0 rgba(0,0,0,.06)}
+.metaline{font-family:var(--mono);font-size:12px;color:var(--faint);letter-spacing:.04em;margin-top:14px;display:flex;flex-wrap:wrap;gap:6px 22px}
+.abstract{margin:30px 0 0;padding:24px 26px;background:var(--panel);border:1px solid var(--line);border-radius:4px}
+.abstract .lbl,.tldr .lbl,.toc .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--hot);margin-bottom:6px}
+.abstract p{margin:.5em 0;font-size:17px}
+/* tl;dr + toc */
+.frontmatter{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;margin:26px 0 6px}
+.tldr,.toc{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px 20px}
+.tldr ul{margin:.3em 0 0;padding-left:1.05em}
+.tldr li{margin:.45em 0;font-size:15.5px}
+.tldr li b{color:var(--hot);font-family:var(--mono);font-size:12.5px;letter-spacing:.04em}
+.toc ol{margin:.3em 0 0;padding-left:0;list-style:none;counter-reset:t}
+.toc li{counter-increment:t;font-size:14.5px;margin:.2em 0;display:flex;gap:9px;align-items:baseline}
+.toc li::before{content:counter(t,decimal-leading-zero);font-family:var(--mono);font-size:11px;color:var(--hot)}
+.toc a{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent}
+.toc a:hover{border-color:var(--hot)}
+.toc .zh{font-size:.92em;color:var(--faint)}
+section{padding:46px 0 8px;border-top:1px solid var(--line);margin-top:42px}
+h2{font-family:var(--display);font-weight:600;font-size:clamp(28px,4.6vw,40px);line-height:1.05;margin:0 0 .5em;letter-spacing:-.01em}
+h2 .num{display:block;font-family:var(--mono);font-weight:500;font-size:13px;letter-spacing:.2em;color:var(--hot);margin-bottom:6px}
+h2 .zh{font-size:.62em;font-weight:600;color:var(--ink2);display:block;margin-top:2px}
+h3{font-family:var(--display);font-weight:600;font-size:21px;margin:1.5em 0 .25em}
+p{margin:.7em 0}
+a{color:var(--cold);text-decoration-thickness:1px;text-underline-offset:2px}
+strong{font-weight:600}
+code,.mono{font-family:var(--mono);font-size:.85em;background:var(--paper2);padding:1px 5px;border-radius:3px;border:1px solid var(--line)}
+ul{padding-left:1.1em}li{margin:.32em 0}
+.lead{font-size:20px}
+/* code / algorithm blocks */
+pre{font-family:var(--mono);font-size:13px;line-height:1.55;background:#211b13;color:#efe7d4;
+  border-radius:6px;padding:16px 18px;overflow-x:auto;margin:18px 0;border:1px solid #3a3025;
+  box-shadow:0 16px 34px -26px rgba(40,30,10,.7)}
+pre b{color:var(--warm);font-weight:600}
+pre i{color:#9fb6c4;font-style:normal}
+pre .c{color:#8a7f6a}
+pre.tag{position:relative;padding-top:30px}
+pre.tag::before{content:attr(data-tag);position:absolute;top:0;left:0;right:0;
+  font-size:11px;letter-spacing:.12em;color:#211b13;background:var(--warm);padding:3px 12px;border-radius:6px 6px 0 0}
+figure{margin:30px 0;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:16px 16px 8px;box-shadow:0 14px 30px -22px rgba(40,30,10,.5)}
+figure img{display:block;width:100%;height:auto;border-radius:3px;background:#fff}
+figcaption{font-family:var(--mono);font-size:12.5px;color:var(--ink2);line-height:1.5;margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+figcaption .fnum{color:var(--hot);font-weight:600;letter-spacing:.08em}
+figure.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:transparent;border:0;box-shadow:none;padding:0}
+figure.duo .cell{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:10px}
+figure.duo figcaption{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:10px 12px;border-top:1px solid var(--line)}
+.svgfig{width:100%;height:auto;display:block}
+.tablewrap{overflow-x:auto;margin:24px 0}
+table.cmp{width:100%;border-collapse:collapse;font-size:15.5px;background:var(--panel)}
+table.cmp th,table.cmp td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+table.cmp thead th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--paper);background:var(--ink)}
+table.cmp thead th:nth-child(2){background:var(--cold)}
+table.cmp thead th:nth-child(3){background:var(--hot)}
+table.cmp td:first-child{font-family:var(--mono);font-size:12.5px;color:var(--ink2);width:24%}
+table.cmp tr:last-child td{border-bottom:0}
+table.cmp .zh{display:block;font-size:.86em;color:var(--faint);margin-top:2px}
+body.lang-en table.cmp .zh{display:none}
+.note{margin:22px 0;padding:14px 18px;border-left:3px solid;border-image:var(--thermal) 1;background:var(--panel)}
+.note .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--hot)}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+.pill{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:30px;padding:5px 12px;background:var(--panel)}
+.pill b{color:var(--hot)}
+ol.loop{counter-reset:s;list-style:none;padding:0;margin:18px 0}
+ol.loop>li{counter-increment:s;position:relative;padding:8px 0 8px 46px;border-bottom:1px dashed var(--line)}
+ol.loop>li::before{content:counter(s,decimal-leading-zero);position:absolute;left:0;top:8px;font-family:var(--mono);font-size:13px;color:var(--paper);background:var(--ink);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+ol.loop>li:last-child{border-bottom:0}
+.refs{font-size:15.5px;padding-left:0;list-style:none}
+.refs li{margin:.6em 0;padding-left:1.6em;position:relative}
+.refs li::before{content:"▸";position:absolute;left:0;color:var(--hot)}
+footer{margin:56px 0 50px;padding-top:24px;border-top:2px solid var(--ink);font-size:14.5px;color:var(--ink2)}
+footer .mono{background:transparent;border:0;padding:0}
+footer a{color:var(--cold)}
+@media(max-width:680px){
+  body{font-size:17px}
+  figure.duo{grid-template-columns:1fr}
+  .frontmatter{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body class="lang-both">
+
+<div class="topbar"><div class="inner">
+  <span class="brand">meta&#8209;research <b>·</b> white paper</span>
+  <div class="toggle" id="lang">
+    <button data-l="en">EN</button>
+    <button data-l="zh">中</button>
+    <button data-l="both" class="active">雙語</button>
+  </div>
+</div></div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Autonomous Engineering Research &nbsp;·&nbsp; 自主工程研究框架</div>
+    <h1 class="title">meta<span class="dash">&#8209;</span>research</h1>
+    <p class="subtitle"><span class="en">An autonomous scientific-design research agent — autoresearch's ergonomics, Meta-Harness's method, shipped as a skill.</span><span class="zh">一個自主科研設計 agent —— autoresearch 的人體工學、Meta-Harness 的方法論，以 skill 形式交付。</span></p>
+    <div class="thermbar"></div>
+    <div class="metaline"><span>VERSION 0.1</span><span>2026-06-03</span><span>PYTHON 3.10+</span><span>84 TESTS PASS</span><span>MIT-style</span></div>
+
+    <div class="abstract">
+      <div class="lbl">Abstract / 摘要</div>
+      <p class="en">Most of an LLM system's behaviour is decided not by its weights but by the <em>harness</em> around it — and most engineering design is decided not by a single best point but by a <em>trade-off</em>. <strong>meta-research</strong> gives a coding agent a real design problem and lets it research autonomously: it proposes a parametric design, scores it with a pluggable objective (a numerical model, a surrogate, or a real-simulation API), reads the diagnostics — including heatmaps — back, and keeps a multi-objective <strong>Pareto frontier</strong> in <strong>git as an append-only experience ledger</strong>. You program it the way you program autoresearch: by editing Markdown and fixed Python, not by touching the loop.</p>
+      <p class="zh">一個 LLM 系統的行為，多半不是由權重決定，而是由它外圍的 <em>harness</em> 決定；而多數工程設計，也不是由單一最佳點決定，而是由<em>取捨</em>決定。<strong>meta-research</strong> 把一個真實設計問題交給 coding agent，讓它自主研究：提出參數化設計、用可插拔的目標函式評分（數值模型、surrogate、或真實模擬 API）、把診斷（包含熱力圖）讀回來，並把多目標的 <strong>Pareto 前緣</strong>維護在 <strong>git 這個 append-only 的經驗帳本</strong>裡。你像在 autoresearch 那樣「程式設計」它——編輯 Markdown 與固定的 Python，而不是去碰迴圈。</p>
+    </div>
+
+    <div class="frontmatter">
+      <div class="tldr">
+        <div class="lbl">TL;DR</div>
+        <ul>
+          <li><b>WHAT</b> <span class="en">an agent that autonomously researches a design against a fixed objective.</span><span class="zh">一個對固定目標自主研究設計的 agent。</span></li>
+          <li><b>HOW</b> <span class="en">propose → evaluate → read diagnostics → commit, forever, in-session.</span><span class="zh">提出 → 評估 → 讀診斷 → commit，在 session 內永不停。</span></li>
+          <li><b>STORE</b> <span class="en">everything, append-only, in git; keep a Pareto frontier.</span><span class="zh">全部存進 git、只增不刪；維護 Pareto 前緣。</span></li>
+          <li><b>GENERAL</b> <span class="en">pluggable evaluator: numerical / surrogate / real-API.</span><span class="zh">可插拔評估器：數值／surrogate／真實 API。</span></li>
+        </ul>
+      </div>
+      <nav class="toc">
+        <div class="lbl">Contents / 目錄</div>
+        <ol>
+          <li><a href="#motivation">Motivation <span class="zh">動機</span></a></li>
+          <li><a href="#fusion">The fusion <span class="zh">融合</span></a></li>
+          <li><a href="#method">Method <span class="zh">方法論</span></a></li>
+          <li><a href="#loop">The in-session loop <span class="zh">自走迴圈</span></a></li>
+          <li><a href="#evaluator">Evaluator interface <span class="zh">評估介面</span></a></li>
+          <li><a href="#arch">Architecture <span class="zh">架構</span></a></li>
+          <li><a href="#pareto">Multi-objective &amp; Pareto <span class="zh">多目標</span></a></li>
+          <li><a href="#ledger">Append-only ledger <span class="zh">經驗帳本</span></a></li>
+          <li><a href="#formats">Data formats <span class="zh">資料規格</span></a></li>
+          <li><a href="#example">Worked example <span class="zh">水冷範例</span></a></li>
+          <li><a href="#compare">Comparison <span class="zh">對照</span></a></li>
+          <li><a href="#use">Getting started <span class="zh">上手</span></a></li>
+          <li><a href="#refs">References &amp; appendix <span class="zh">參考與附錄</span></a></li>
+        </ol>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 01 -->
+  <section id="motivation">
+    <h2><span class="num">01 / Motivation</span><span class="en">The harness, not the weights</span><span class="zh">關鍵在 harness，不在權重</span></h2>
+    <p class="en lead">A frozen model can succeed or fail on the same task depending entirely on what its surrounding code chooses to store, retrieve, and show it. That surrounding code is the <strong>harness</strong>. Engineering R&D has the same shape: the simulator is fixed ground truth, and the win comes from <em>which design you try next</em>.</p>
+    <p class="zh lead">同一個被凍結的模型，在同一個任務上會成功或失敗，完全取決於外圍程式碼決定「存什麼、取什麼、給它看什麼」。那段外圍程式碼就是 <strong>harness</strong>。工程研發是同樣的形狀：模擬器是固定的 ground truth，勝負來自<em>你下一個試什麼設計</em>。</p>
+    <p class="en">The motivating picture is concrete: you look at a thermal heatmap of a liquid-cooling cold plate and ask <em>how should the fins inside be shaped, sized, and placed?</em> That is not a one-shot question — it is a loop of hypothesise → simulate → look at the field → revise. meta-research automates exactly that loop, for any design problem with adjustable variables and a measurable objective.</p>
+    <p class="zh">具體的畫面是這樣：你看著一張水冷頭的熱力圖，問<em>裡面的鰭片該怎麼設計、多大、擺哪？</em>這不是一次性問題——它是一個「提假設 → 模擬 → 看溫度場 → 修正」的迴圈。meta-research 把這個迴圈自動化，適用於任何「有可調變數 + 有可量測目標」的設計問題。</p>
+  </section>
+
+  <!-- 02 fusion -->
+  <section id="fusion">
+    <h2><span class="num">02 / The fusion</span><span class="en">Two ideas, joined</span><span class="zh">兩個想法的融合</span></h2>
+    <p class="en">meta-research is deliberately a fusion of two existing projects. It keeps the <strong>ergonomics</strong> of Karpathy's <em>autoresearch</em> and adopts the <strong>method</strong> of Stanford's <em>Meta-Harness</em> paper.</p>
+    <p class="zh">meta-research 刻意是兩個既有專案的融合：保留 Karpathy 的 <em>autoresearch</em> 的<strong>人體工學</strong>，採用 Stanford <em>Meta-Harness</em> 論文的<strong>方法論</strong>。</p>
+    <figure>
+      <svg class="svgfig" viewBox="0 0 820 360" role="img" aria-label="Fusion diagram">
+        <defs><linearGradient id="therm" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#1f4e79"/><stop offset=".35" stop-color="#3286b3"/>
+          <stop offset=".7" stop-color="#e3a13a"/><stop offset="1" stop-color="#cf3a22"/></linearGradient></defs>
+        <rect x="20" y="40" width="250" height="120" rx="8" fill="#fbf8f0" stroke="#3286b3" stroke-width="2"/>
+        <text x="38" y="68" font-family="IBM Plex Mono,monospace" font-size="13" fill="#1f4e79" font-weight="600">autoresearch</text>
+        <text x="38" y="90" font-family="Spectral,serif" font-size="13" fill="#574e3f">· config-as-code, no YAML</text>
+        <text x="38" y="110" font-family="Spectral,serif" font-size="13" fill="#574e3f">· markdown-as-program</text>
+        <text x="38" y="130" font-family="Spectral,serif" font-size="13" fill="#574e3f">· agent runs the loop itself</text>
+        <text x="38" y="150" font-family="Spectral,serif" font-size="13" fill="#574e3f">· git + results.tsv</text>
+        <text x="38" y="30" font-family="IBM Plex Mono,monospace" font-size="10" fill="#8a7f6a">ERGONOMICS / 人體工學</text>
+        <rect x="550" y="40" width="250" height="120" rx="8" fill="#fbf8f0" stroke="#cf3a22" stroke-width="2"/>
+        <text x="568" y="68" font-family="IBM Plex Mono,monospace" font-size="13" fill="#cf3a22" font-weight="600">Meta-Harness</text>
+        <text x="568" y="90" font-family="Spectral,serif" font-size="13" fill="#574e3f">· store ALL experience</text>
+        <text x="568" y="110" font-family="Spectral,serif" font-size="13" fill="#574e3f">· read diagnostics back</text>
+        <text x="568" y="130" font-family="Spectral,serif" font-size="13" fill="#574e3f">· Pareto frontier</text>
+        <text x="568" y="150" font-family="Spectral,serif" font-size="13" fill="#574e3f">· hypothesis-driven</text>
+        <text x="568" y="30" font-family="IBM Plex Mono,monospace" font-size="10" fill="#8a7f6a">METHOD / 方法論</text>
+        <path d="M270 100 C 340 100, 360 250, 410 250" fill="none" stroke="#3286b3" stroke-width="2"/>
+        <path d="M550 100 C 480 100, 460 250, 410 250" fill="none" stroke="#cf3a22" stroke-width="2"/>
+        <rect x="250" y="225" width="320" height="110" rx="10" fill="#1a1610"/>
+        <rect x="250" y="225" width="320" height="6" rx="3" fill="url(#therm)"/>
+        <text x="410" y="262" text-anchor="middle" font-family="Fraunces,serif" font-size="22" fill="#f4efe3" font-weight="600">meta-research</text>
+        <text x="410" y="288" text-anchor="middle" font-family="Spectral,serif" font-size="13" fill="#efe7d4">general autonomous design-research agent</text>
+        <text x="410" y="308" text-anchor="middle" font-family="Spectral,serif" font-size="13" fill="#e3a13a">pluggable evaluator · shipped as a skill</text>
+        <text x="410" y="326" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="11" fill="#8a7f6a">通用自主設計研究 agent</text>
+      </svg>
+      <figcaption><span class="fnum">FIG. 1 / 圖 1</span> &nbsp; The fusion: autoresearch ergonomics × Meta-Harness method → meta-research. &nbsp; 融合：autoresearch 人體工學 × Meta-Harness 方法論 → meta-research。</figcaption>
+    </figure>
+    <p class="en">The one deliberate divergence: autoresearch keeps a single editable file and uses git <em>keep/discard</em> (advance or reset). meta-research keeps a whole <em>population</em> of designs and is strictly <strong>append-only</strong> — a regressed design is still committed, because its trace is exactly the data the agent reads next.</p>
+    <p class="zh">唯一刻意的分歧：autoresearch 維護單一可編輯檔，用 git 的 <em>keep/discard</em>（前進或 reset）。meta-research 維護一整個設計<em>族群</em>，且嚴格 <strong>append-only</strong>——退步的設計仍然會被 commit，因為它的軌跡正是 agent 下一步要讀的資料。</p>
+  </section>
+
+  <!-- 03 method -->
+  <section id="method">
+    <h2><span class="num">03 / Method</span><span class="en">Harness search, applied to design</span><span class="zh">把 harness search 用在設計上</span></h2>
+    <p class="en">Meta-Harness frames a system's quality as a function of two things: a fixed base capability, and a searchable harness around it. It then runs an <em>outer loop</em> in which a coding-agent proposer reads the entire history of prior attempts off a filesystem — source, scores, and execution traces — and proposes the next candidate. meta-research carries that method over to engineering design, where the "base capability" is a fixed simulator and the "harness" is the design itself plus the reasoning that produced it.</p>
+    <p class="zh">Meta-Harness 把一個系統的品質看成兩件事的函數：固定的基礎能力，加上外圍可搜尋的 harness。接著跑一個<em>外層迴圈</em>：由 coding-agent proposer 從檔案系統讀回所有過去嘗試的完整歷史——原始碼、分數、執行軌跡——再提出下一個候選。meta-research 把這套方法搬到工程設計：這裡的「基礎能力」是固定的模擬器，「harness」就是設計本身與產生它的推理。</p>
+
+    <pre class="tag" data-tag="ALGORITHM · the meta-research loop (run in-session by the agent)"><span class="c"># seed the population</span>
+<b>for</b> d <b>in</b> BASELINES:  r = evaluate(d); record(d, r); frontier = Pareto(all)
+
+<b>loop</b> forever <span class="c">(until interrupted):</span>
+  1  E  = <i>read ALL prior experience</i>     <span class="c"># results.tsv · frontier.json · git log</span>
+                                       <span class="c"># + prior heatmaps + hypotheses</span>
+  2  h  = a falsifiable hypothesis on <b>ONE</b> mechanism, grounded in E
+  3  d  = write designs/&lt;name&gt;.py        <span class="c"># change one mechanism vs a frontier design</span>
+  4  r  = Evaluator.evaluate(d)          <span class="c"># fixed ground truth — never edited</span>
+  5  record(d, h, r, traces); frontier = Pareto(all); git commit   <span class="c"># append-only</span>
+  6  <i>read r + the new heatmap</i>          <span class="c"># the loop closes here → informs step 1</span>
+
+<b>return</b> Pareto frontier</pre>
+
+    <h3>Why store everything, not summaries <span class="zh">為何存全部而非摘要</span></h3>
+    <p class="en">The proposer's edge comes from <em>diagnosis</em>: to know why a design underperformed, it has to see <em>where</em> it failed — the temperature field, the per-mechanism breakdown, the raw numbers. Compressing history into a one-line summary throws away exactly that signal. So meta-research persists the full execution trace of every candidate and lets the agent re-read it (including images) on the next turn.</p>
+    <p class="zh">proposer 的優勢來自<em>診斷</em>：要知道一個設計為何表現不好，它得看見它<em>哪裡</em>失敗——溫度場、各機制的拆解、原始數字。把歷史壓成一行摘要，丟掉的正是這個訊號。所以 meta-research 保存每個候選的完整執行軌跡，讓 agent 下一輪能把它（包含圖像）讀回來。</p>
+    <h3>No parent-selection rule <span class="zh">沒有 parent-selection 規則</span></h3>
+    <p class="en">Unlike an evolutionary loop that mutates a chosen parent, meta-research imposes no selection rule: the agent may inspect <em>any</em> prior candidate via <code>git show</code> and build on whichever combination it judges most promising. The frontier informs, but does not constrain, the next move.</p>
+    <p class="zh">不同於「挑一個 parent 再變異」的演化式迴圈，meta-research 不強加任何選擇規則：agent 可透過 <code>git show</code> 檢視<em>任何</em>過去候選，並在它判斷最有希望的組合上往前。前緣提供資訊，但不限制下一步。</p>
+  </section>
+
+  <!-- 04 loop -->
+  <section id="loop">
+    <h2><span class="num">04 / How it works</span><span class="en">The in-session loop</span><span class="zh">在 session 內的自走迴圈</span></h2>
+    <p class="en">There is no Python orchestrator and no subprocess driver. You open a coding agent in the experiment directory, point it at <code>program.md</code>, and <em>the agent itself</em> runs the loop. The framework only provides deterministic tools — <code>meta-research eval | seed | frontier | progress</code> — and a <strong>skill</strong> that carries the methodology.</p>
+    <p class="zh">沒有 Python orchestrator、沒有 subprocess 驅動。你在實驗目錄裡開一個 coding agent，叫它看 <code>program.md</code>，然後<em>由 agent 本人</em>跑迴圈。框架只提供確定性工具——<code>meta-research eval | seed | frontier | progress</code>——以及一個承載方法論的 <strong>skill</strong>。</p>
+    <figure>
+      <svg class="svgfig" viewBox="0 0 820 300" role="img" aria-label="Loop diagram">
+        <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#574e3f"/></marker></defs>
+        <g font-family="IBM Plex Mono,monospace" font-size="12.5" fill="#1a1610">
+        <rect x="40" y="120" width="150" height="64" rx="8" fill="#fbf8f0" stroke="#1f4e79" stroke-width="2"/>
+        <text x="115" y="146" text-anchor="middle" font-weight="600">1 · inspect</text>
+        <text x="115" y="166" text-anchor="middle" font-size="11" fill="#574e3f">frontier · log · heatmaps</text>
+        <rect x="235" y="40" width="150" height="64" rx="8" fill="#fbf8f0" stroke="#3286b3" stroke-width="2"/>
+        <text x="310" y="66" text-anchor="middle" font-weight="600">2 · hypothesise</text>
+        <text x="310" y="86" text-anchor="middle" font-size="11" fill="#574e3f">one mechanism</text>
+        <rect x="435" y="40" width="150" height="64" rx="8" fill="#fbf8f0" stroke="#e3a13a" stroke-width="2"/>
+        <text x="510" y="66" text-anchor="middle" font-weight="600">3 · write design</text>
+        <text x="510" y="86" text-anchor="middle" font-size="11" fill="#574e3f">designs/&lt;name&gt;.py</text>
+        <rect x="630" y="120" width="150" height="64" rx="8" fill="#fbf8f0" stroke="#cf3a22" stroke-width="2"/>
+        <text x="705" y="146" text-anchor="middle" font-weight="600">4 · eval+commit</text>
+        <text x="705" y="166" text-anchor="middle" font-size="11" fill="#574e3f">score · store · git</text>
+        <rect x="335" y="210" width="170" height="64" rx="8" fill="#1a1610"/>
+        <text x="420" y="236" text-anchor="middle" font-weight="600" fill="#f4efe3">5 · read heatmap</text>
+        <text x="420" y="256" text-anchor="middle" font-size="11" fill="#e3a13a">the loop closes here</text>
+        <path d="M150 120 C 170 70, 210 72, 235 72" fill="none" stroke="#574e3f" stroke-width="1.8" marker-end="url(#ah)"/>
+        <path d="M385 72 L 430 72" fill="none" stroke="#574e3f" stroke-width="1.8" marker-end="url(#ah)"/>
+        <path d="M585 72 C 620 72, 660 80, 685 118" fill="none" stroke="#574e3f" stroke-width="1.8" marker-end="url(#ah)"/>
+        <path d="M660 184 C 600 230, 540 240, 507 242" fill="none" stroke="#574e3f" stroke-width="1.8" marker-end="url(#ah)"/>
+        <path d="M335 242 C 230 240, 150 215, 120 186" fill="none" stroke="#cf3a22" stroke-width="1.8" marker-end="url(#ah)"/>
+        </g>
+      </svg>
+      <figcaption><span class="fnum">FIG. 2 / 圖 2</span> &nbsp; The agent's loop, run in-session — and never stops until interrupted. &nbsp; agent 在 session 內跑的迴圈，未被打斷前永不停止。</figcaption>
+    </figure>
+    <div class="pills">
+      <span class="pill"><b>prepare.py</b> fixed / 固定</span>
+      <span class="pill"><b>designs/</b> the editable population / 可編輯族群</span>
+      <span class="pill"><b>program.md</b> the program / 程式</span>
+      <span class="pill"><b>experience/</b> the ledger / 帳本</span>
+    </div>
+  </section>
+
+  <!-- 05 evaluator -->
+  <section id="evaluator">
+    <h2><span class="num">05 / Generality</span><span class="en">One evaluator interface, three backends</span><span class="zh">一個評估介面，三種後端</span></h2>
+    <p class="en">The hinge that makes the framework general is a single <code>Evaluator</code> contract. The same loop works whether your objective is computed in-process, predicted by a model you trained, or returned by a real solver over the network — you choose in <code>prepare.py</code>, in one line.</p>
+    <p class="zh">讓框架「通用」的關鍵，是單一的 <code>Evaluator</code> 合約。不論你的目標是行程內算出來的、你訓練的模型預測的、還是網路上真實求解器回傳的，同一個迴圈都成立——你在 <code>prepare.py</code> 裡用一行選擇。</p>
+    <figure>
+      <svg class="svgfig" viewBox="0 0 820 210" role="img" aria-label="Evaluator backends">
+        <rect x="320" y="20" width="180" height="56" rx="8" fill="#1a1610"/>
+        <rect x="320" y="20" width="180" height="5" rx="2.5" fill="url(#therm)"/>
+        <text x="410" y="44" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="13" fill="#f4efe3" font-weight="600">Evaluator</text>
+        <text x="410" y="62" text-anchor="middle" font-family="Spectral,serif" font-size="11" fill="#e3a13a">evaluate(design) → scores + artifacts</text>
+        <g font-family="IBM Plex Mono,monospace" font-size="12.5">
+        <rect x="40" y="135" width="220" height="60" rx="8" fill="#fbf8f0" stroke="#1f4e79" stroke-width="2"/>
+        <text x="150" y="160" text-anchor="middle" fill="#1f4e79" font-weight="600">NumericalEvaluator</text>
+        <text x="150" y="180" text-anchor="middle" font-family="Spectral,serif" font-size="11.5" fill="#574e3f">in-process model · runs now</text>
+        <rect x="300" y="135" width="220" height="60" rx="8" fill="#fbf8f0" stroke="#3286b3" stroke-width="2"/>
+        <text x="410" y="160" text-anchor="middle" fill="#3286b3" font-weight="600">SurrogateEvaluator</text>
+        <text x="410" y="180" text-anchor="middle" font-family="Spectral,serif" font-size="11.5" fill="#574e3f">your trained model</text>
+        <rect x="560" y="135" width="220" height="60" rx="8" fill="#fbf8f0" stroke="#cf3a22" stroke-width="2"/>
+        <text x="670" y="160" text-anchor="middle" fill="#cf3a22" font-weight="600">ApiSolverEvaluator</text>
+        <text x="670" y="180" text-anchor="middle" font-family="Spectral,serif" font-size="11.5" fill="#574e3f">real CFD / FEA over REST/CLI</text>
+        </g>
+        <g stroke="#574e3f" stroke-width="1.6" fill="none">
+          <path d="M360 76 C 300 100, 200 110, 150 133"/><path d="M410 76 L 410 133"/><path d="M460 76 C 520 100, 620 110, 670 133"/>
+        </g>
+      </svg>
+      <figcaption><span class="fnum">FIG. 3 / 圖 3</span> &nbsp; Pluggable evaluation: numerical surrogate (runs out of the box), a loaded surrogate model, or a real-simulation API. &nbsp; 可插拔評估：數值代理（開箱即跑）、載入的 surrogate 模型、或真實模擬 API。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 06 architecture -->
+  <section id="arch">
+    <h2><span class="num">06 / Architecture</span><span class="en">A small engine + a thin contract</span><span class="zh">小引擎 + 薄合約</span></h2>
+    <p class="en">The framework is a reusable Python package (the <em>engine</em>) plus a skill. Everything depends on one tiny, frozen contract — five types — so domain code never imports the framework's internals. The two protocols below are the entire surface a new domain must satisfy.</p>
+    <p class="zh">框架是一個可重用的 Python 套件（<em>引擎</em>）加上一個 skill。一切都依賴一份極小、凍結的合約——五個型別——所以領域程式碼從不需要 import 框架內部。下面兩個 protocol 就是一個新領域要滿足的全部介面。</p>
+
+    <pre class="tag" data-tag="meta_research/interfaces.py  ·  the frozen contract"><span class="c"># --- data ---</span>
+@dataclass(frozen=True)
+<b>class</b> Objective:  name: str; direction: str=<i>"min"</i>; unit: str=<i>""</i>; weight: float=1.0
+@dataclass(frozen=True)
+<b>class</b> DesignSpec: params: dict[str,Any]; artifacts: dict[str,str]={}; notes: str=<i>""</i>
+@dataclass(frozen=True)
+<b>class</b> EvalResult: scores: dict[str,float]; feasible: bool=True
+              metadata: dict[str,Any]={}; artifacts: dict[str,str]={}; error: str|None=None
+
+<span class="c"># --- the two pluggable protocols ---</span>
+<b>class</b> Candidate(Protocol):          <span class="c"># the design module the agent edits</span>
+    name: str
+    <b>def</b> build(self) -> DesignSpec: ...
+
+<b>class</b> Evaluator(Protocol):          <span class="c"># numerical | surrogate | api</span>
+    objectives: list[Objective]
+    <b>def</b> evaluate(self, design: DesignSpec, out_dir: Path) -> EvalResult: ...</pre>
+
+    <figure>
+      <svg class="svgfig" viewBox="0 0 820 430" role="img" aria-label="Module map">
+        <!-- skill -->
+        <rect x="250" y="16" width="320" height="48" rx="9" fill="#1a1610"/>
+        <rect x="250" y="16" width="320" height="5" rx="2.5" fill="url(#therm)"/>
+        <text x="410" y="38" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="12.5" fill="#f4efe3" font-weight="600">skills/meta-research/  ·  the methodology</text>
+        <text x="410" y="54" text-anchor="middle" font-family="Spectral,serif" font-size="11" fill="#e3a13a">SKILL.md + REFERENCE.md — drives the loop</text>
+        <!-- engine box -->
+        <rect x="40" y="96" width="740" height="184" rx="10" fill="#fbf8f0" stroke="#574e3f" stroke-width="1.5"/>
+        <text x="58" y="120" font-family="IBM Plex Mono,monospace" font-size="11" fill="#8a7f6a">ENGINE — meta_research/  (deterministic tools, NOT an orchestrator)</text>
+        <g font-family="IBM Plex Mono,monospace" font-size="12" fill="#1a1610">
+          <g>
+            <rect x="58" y="134" width="150" height="40" rx="6" fill="#fff" stroke="#cf3a22" stroke-width="1.5"/>
+            <text x="133" y="153" text-anchor="middle" font-weight="600">interfaces</text><text x="133" y="167" text-anchor="middle" font-size="10" fill="#574e3f">the contract</text>
+          </g>
+          <g><rect x="222" y="134" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="297" y="153" text-anchor="middle">frontier</text><text x="297" y="167" text-anchor="middle" font-size="10" fill="#574e3f">Pareto</text></g>
+          <g><rect x="386" y="134" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="461" y="153" text-anchor="middle">experience</text><text x="461" y="167" text-anchor="middle" font-size="10" fill="#574e3f">bundles + git</text></g>
+          <g><rect x="550" y="134" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="625" y="153" text-anchor="middle">candidates</text><text x="625" y="167" text-anchor="middle" font-size="10" fill="#574e3f">load+validate</text></g>
+          <g><rect x="58" y="186" width="150" height="40" rx="6" fill="#fff" stroke="#e3a13a" stroke-width="1.5"/><text x="133" y="205" text-anchor="middle" font-weight="600">runner</text><text x="133" y="219" text-anchor="middle" font-size="10" fill="#574e3f">eval→store→commit</text></g>
+          <g><rect x="222" y="186" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="297" y="205" text-anchor="middle">progress</text><text x="297" y="219" text-anchor="middle" font-size="10" fill="#574e3f">plots</text></g>
+          <g><rect x="386" y="186" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="461" y="205" text-anchor="middle">cli</text><text x="461" y="219" text-anchor="middle" font-size="10" fill="#574e3f">eval|seed|frontier|progress</text></g>
+          <g><rect x="550" y="186" width="150" height="40" rx="6" fill="#fff" stroke="#3286b3" stroke-width="1.3"/><text x="625" y="205" text-anchor="middle">logfmt</text><text x="625" y="219" text-anchor="middle" font-size="10" fill="#574e3f">results.tsv</text></g>
+          <g><rect x="58" y="238" width="642" height="30" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.3"/>
+            <text x="379" y="258" text-anchor="middle">evaluators/ &nbsp; numerical &nbsp;·&nbsp; surrogate &nbsp;·&nbsp; api_solver</text></g>
+        </g>
+        <!-- experiment -->
+        <rect x="40" y="316" width="740" height="92" rx="10" fill="#fbf8f0" stroke="#cf3a22" stroke-width="1.5"/>
+        <text x="58" y="338" font-family="IBM Plex Mono,monospace" font-size="11" fill="#8a7f6a">YOUR EXPERIMENT — examples/water_cooling/  (configuration-as-code)</text>
+        <g font-family="IBM Plex Mono,monospace" font-size="12" fill="#1a1610">
+          <rect x="58" y="352" width="160" height="42" rx="6" fill="#fff" stroke="#574e3f" stroke-width="1.2"/><text x="138" y="372" text-anchor="middle">prepare.py</text><text x="138" y="386" text-anchor="middle" font-size="10" fill="#574e3f">objectives · evaluator</text>
+          <rect x="232" y="352" width="160" height="42" rx="6" fill="#fff" stroke="#574e3f" stroke-width="1.2"/><text x="312" y="372" text-anchor="middle">objective.py</text><text x="312" y="386" text-anchor="middle" font-size="10" fill="#574e3f">the model</text>
+          <rect x="406" y="352" width="160" height="42" rx="6" fill="#fff" stroke="#574e3f" stroke-width="1.2"/><text x="486" y="372" text-anchor="middle">designs/</text><text x="486" y="386" text-anchor="middle" font-size="10" fill="#574e3f">editable population</text>
+          <rect x="580" y="352" width="160" height="42" rx="6" fill="#fff" stroke="#574e3f" stroke-width="1.2"/><text x="660" y="372" text-anchor="middle">program.md</text><text x="660" y="386" text-anchor="middle" font-size="10" fill="#574e3f">the program</text>
+        </g>
+        <g stroke="#cf3a22" stroke-width="1.6" fill="none" stroke-dasharray="4 3">
+          <path d="M410 64 L 410 94"/>
+        </g>
+        <g stroke="#574e3f" stroke-width="1.4" fill="none">
+          <path d="M410 316 L 410 282"/>
+        </g>
+      </svg>
+      <figcaption><span class="fnum">FIG. 4 / 圖 4</span> &nbsp; Three layers: the <em>skill</em> drives the loop; the <em>engine</em> exposes deterministic tools; <em>your experiment</em> plugs the domain in as plain Python. &nbsp; 三層：<em>skill</em> 驅動迴圈；<em>引擎</em>提供確定性工具；<em>你的實驗</em>以純 Python 插入領域。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 07 pareto -->
+  <section id="pareto">
+    <h2><span class="num">07 / Objective</span><span class="en">Multi-objective &amp; the Pareto frontier</span><span class="zh">多目標與 Pareto 前緣</span></h2>
+    <p class="en">autoresearch drives a single scalar (validation bits-per-byte). Engineering design rarely collapses to one number: lowering thermal resistance usually <em>raises</em> pumping pressure. So meta-research keeps a <strong>Pareto frontier</strong> — the set of designs that are not beaten on every objective at once. Each frontier member is a different, legitimate trade-off; the loop's job is to push that frontier toward the better corner.</p>
+    <p class="zh">autoresearch 驅動單一純量（validation bits-per-byte）。工程設計很少能壓成一個數字：降低熱阻通常會<em>抬高</em>壓降。所以 meta-research 維護一條 <strong>Pareto 前緣</strong>——一組「不會在每個目標上同時被打敗」的設計。前緣上每個成員都是不同而合理的取捨；迴圈的工作就是把這條前緣往更好的角落推。</p>
+    <figure>
+      <img src="figures/progress.png" alt="best-so-far progress curves">
+      <figcaption><span class="fnum">FIG. 5 / 圖 5</span> &nbsp; The autoresearch <code>progress.png</code> analog, one panel per objective: every evaluated design (dots) and the <em>best-so-far</em> (red). Thermal resistance falls 0.094 → 0.074 → 0.055 K/W over the session. &nbsp; autoresearch <code>progress.png</code> 的對應物，每目標一張：所有評估過的設計（點）與<em>當前最佳</em>（紅線）。熱阻在本回合從 0.094 → 0.074 → 0.055 K/W 下降。</figcaption>
+    </figure>
+    <figure>
+      <img src="figures/progress_pareto.png" alt="Pareto frontier scatter">
+      <figcaption><span class="fnum">FIG. 6 / 圖 6</span> &nbsp; The Pareto frontier (red) over thermal resistance vs. pressure drop; points coloured by experiment order. Dominated designs stay recorded but off the frontier. &nbsp; 熱阻 vs 壓降的 Pareto 前緣（紅線）；點以實驗順序上色。被支配的設計仍被記錄，但不在前緣上。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 08 ledger -->
+  <section id="ledger">
+    <h2><span class="num">08 / Memory</span><span class="en">The append-only experience ledger</span><span class="zh">append-only 經驗帳本</span></h2>
+    <p class="en">Following Meta-Harness, <strong>everything is stored</strong> — not summaries. Each evaluated design becomes an <em>experience bundle</em>: its verbatim source, the agent's reasoning, the scores, and the execution traces (heatmaps, raw fields, breakdown). git versions these as an <strong>append-only ledger</strong>: one commit per iteration, never reset. <code>git log</code> is a scannable index; <code>git show &lt;sha&gt;:…/design.py</code> recovers any past candidate in full.</p>
+    <p class="zh">沿用 Meta-Harness，<strong>全部存下來</strong>——不是摘要。每個評估過的設計成為一個<em>經驗 bundle</em>：逐字原始碼、agent 的推理、分數、以及執行軌跡（熱力圖、原始場、機制拆解）。git 把這些版本化成 <strong>append-only 帳本</strong>：每輪一個 commit，永不 reset。<code>git log</code> 是可掃描的索引；<code>git show &lt;sha&gt;:…/design.py</code> 能完整還原任何過去的候選。</p>
+    <figure>
+      <svg class="svgfig" viewBox="0 0 820 250" role="img" aria-label="Experience ledger">
+        <g font-family="IBM Plex Mono,monospace">
+        <line x1="70" y1="40" x2="70" y2="220" stroke="#574e3f" stroke-width="2"/>
+        <circle cx="70" cy="60" r="7" fill="#1f4e79"/><circle cx="70" cy="125" r="7" fill="#e3a13a"/><circle cx="70" cy="190" r="7" fill="#cf3a22"/>
+        <text x="92" y="50" font-size="12" fill="#8a7f6a">git · append-only</text>
+        <text x="92" y="64" font-size="12.5" fill="#1a1610">iter00 straight_fins [frontier]</text>
+        <text x="92" y="129" font-size="12.5" fill="#1a1610">iter05 denser_straight [dominated]</text>
+        <text x="92" y="194" font-size="12.5" fill="#1a1610">iter07 microfin [frontier]</text>
+        <rect x="430" y="36" width="360" height="178" rx="9" fill="#fbf8f0" stroke="#cf3a22" stroke-width="2"/>
+        <rect x="430" y="36" width="360" height="5" rx="2.5" fill="url(#therm)"/>
+        <text x="450" y="62" font-size="12.5" fill="#cf3a22" font-weight="600">experience/007_microfin/</text>
+        <g font-size="12" fill="#574e3f" font-family="Spectral,serif">
+        <text x="462" y="86">design.py &nbsp;&nbsp;— verbatim source / 原始碼</text>
+        <text x="462" y="108">hypothesis.md — reasoning / 推理</text>
+        <text x="462" y="130">result.json &nbsp;— scores + metadata / 分數</text>
+        <text x="462" y="152">trace/heatmap.png — diagnostic / 診斷</text>
+        <text x="462" y="174">trace/fields.npz · breakdown.json</text>
+        </g>
+        <path d="M77 190 C 250 190, 300 125, 428 125" fill="none" stroke="#cf3a22" stroke-width="1.6" stroke-dasharray="4 3"/>
+        </g>
+      </svg>
+      <figcaption><span class="fnum">FIG. 7 / 圖 7</span> &nbsp; One commit per iteration; each commit is a full experience bundle. Nothing is ever discarded. &nbsp; 每輪一個 commit，每個 commit 是一個完整的經驗 bundle，永不丟棄。</figcaption>
+    </figure>
+  </section>
+
+  <!-- 09 data formats -->
+  <section id="formats">
+    <h2><span class="num">09 / Data formats</span><span class="en">What the ledger actually contains</span><span class="zh">帳本裡實際長什麼樣</span></h2>
+    <p class="en">All formats below are real output from the shipped example. The bundle is the source of truth; <code>results.tsv</code> and <code>frontier.json</code> are derived views recomputed from it.</p>
+    <p class="zh">以下格式皆為內附範例的真實輸出。bundle 是真實來源；<code>results.tsv</code> 與 <code>frontier.json</code> 是由它重算出的衍生視圖。</p>
+
+    <pre class="tag" data-tag="experience bundle  ·  one directory per evaluated design">experience/000_straight_fins/
+├─ design.py            <span class="c"># verbatim copy of the design module</span>
+├─ design_spec.json     <span class="c"># the built DesignSpec (params)</span>
+├─ hypothesis.md        <span class="c"># reasoning + front-matter (status filled at eval time)</span>
+├─ result.json          <span class="c"># scores + metadata + status</span>
+└─ trace/
+   ├─ heatmap.png        <span class="c"># the diagnostic the agent re-reads</span>
+   ├─ fields.npz         <span class="c"># raw temperature field</span>
+   └─ breakdown.json     <span class="c"># R_conv · R_caloric · Re · Nu · fin_efficiency · …</span></pre>
+
+    <pre class="tag" data-tag="hypothesis.md  ·  the reasoning trace (authored by the agent)">---
+name: straight_fins
+iteration: 0
+axis: baseline
+parent: ""
+expected: seed population (Phase 0)
+status: <b>frontier</b>            <span class="c"># frontier | dominated | infeasible | crash</span>
+---
+Baseline 'straight_fins' evaluated to seed the Pareto frontier.</pre>
+
+    <pre class="tag" data-tag="results.tsv  ·  the flat ledger (tab-separated)">iter  name           status     feasible  thermal_resistance   pressure_drop   hypothesis
+0     straight_fins  frontier   true      0.073998080514198    17.22054649…    seed population (Phase 0)
+1     pin_fins       dominated  true      0.138538699308707    61.36574074…    seed population (Phase 0)</pre>
+
+    <pre class="tag" data-tag="frontier.json  ·  the current Pareto set (recomputed every step)">{
+  "objectives": [{"name":"thermal_resistance","direction":"min","unit":"K/W"},
+                 {"name":"pressure_drop","direction":"min","unit":"Pa"}],
+  "pareto": [
+    {"name":"straight_fins","iteration":0,
+     "scores":{"thermal_resistance":0.07399…,"pressure_drop":17.2205…},
+     "metadata":{"R_conv":0.0548,"R_caloric":0.0145,"Re":239.0,"Nu":5.99,
+                 "fin_efficiency":0.587,"mass_g":100.4, <span class="c">…</span>}}
+  ],
+  "best_per_objective":{"thermal_resistance":{"name":"straight_fins","value":0.07399…},
+                        "pressure_drop":{"name":"straight_fins","value":17.2205…}}
+}</pre>
+
+    <pre class="tag" data-tag="git commit message  ·  iter&lt;NN&gt; &lt;name&gt;: &lt;obj&gt;=&lt;v&gt; … [status] — summary">iter00 straight_fins: thermal_resistance=0.0739981 pressure_drop=17.2205 [frontier] — seed population (Phase 0)
+iter01 pin_fins:      thermal_resistance=0.138539  pressure_drop=61.3657 [dominated] — seed population (Phase 0)</pre>
+    <p class="en">The commit subject is the one-line index; the substance lives in the files the commit touches, recoverable in full with <code>git show</code>.</p>
+    <p class="zh">commit 標題是一行索引；實質內容在該 commit 改動的檔案裡，用 <code>git show</code> 可完整還原。</p>
+  </section>
+
+  <!-- 10 example -->
+  <section id="example">
+    <h2><span class="num">10 / Worked example</span><span class="en">Water-cooling cold plate</span><span class="zh">水冷頭範例</span></h2>
+    <p class="en">The shipped example optimises the fins inside a 40×40×20 mm copper cold plate at 200 W and 1 L/min of water. Two objectives: <strong>thermal resistance</strong> (K/W, ↓) and <strong>pressure drop</strong> (Pa, ↓). The diagnostic the agent reads each iteration is the base-plate temperature field.</p>
+    <p class="zh">內附範例最佳化一個 40×40×20 mm 銅製水冷頭內部的鰭片，工況 200 W、1 L/min 水。兩個目標：<strong>熱阻</strong>（K/W，↓）與<strong>壓降</strong>（Pa，↓）。agent 每輪讀的診斷，就是底板溫度場。</p>
+    <figure class="duo">
+      <div class="cell"><img src="figures/heatmap_hot.png" alt="hot baseline heatmap"></div>
+      <div class="cell"><img src="figures/heatmap_cool.png" alt="cooler optimised heatmap"></div>
+      <figcaption><span class="fnum">FIG. 8 / 圖 8</span> &nbsp; The agent reads these back. Left: an aluminium baseline, R_th 0.094 K/W, ΔT ≈ 18.9 °C. Right: a copper microfin design found in the same session, R_th 0.055 K/W, ΔT ≈ 11.0 °C. &nbsp; 這些就是 agent 讀回去的圖。左：鋁基準，R_th 0.094 K/W，ΔT ≈ 18.9 °C。右：同回合找到的銅微鰭片，R_th 0.055 K/W，ΔT ≈ 11.0 °C。</figcaption>
+    </figure>
+    <p class="en">The session's Pareto frontier — the deliverable you wake up to — spans the full trade-off:</p>
+    <p class="zh">本回合的 Pareto 前緣——你早上起來看到的交付物——橫跨整個取捨：</p>
+    <div class="tablewrap">
+      <table class="cmp">
+        <thead><tr><th>design / 設計</th><th>thermal resistance ↓</th><th>pressure drop ↓</th></tr></thead>
+        <tbody>
+          <tr><td>sparse_straight</td><td>0.120 K/W</td><td><strong>5.7 Pa</strong> &nbsp;<span class="zh">最省泵</span></td></tr>
+          <tr><td>straight_fins <span class="zh">（基準）</span></td><td>0.074 K/W</td><td>17.2 Pa</td></tr>
+          <tr><td>tall_dense</td><td>0.056 K/W</td><td>22.5 Pa</td></tr>
+          <tr><td>microfin</td><td><strong>0.055 K/W</strong> &nbsp;<span class="zh">最低熱阻</span></td><td>28.1 Pa</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note"><span class="lbl">Note / 註</span>
+      <p class="en">These numbers come from a self-contained numpy surrogate (trend-correct, not a validated CFD). It exists so the example runs out of the box — swap in <code>ApiSolverEvaluator</code> to drive a real solver. All figures on this page were produced by the framework itself.</p>
+      <p class="zh">這些數字來自一個自包含的 numpy 代理模型（趨勢正確，非經驗證的 CFD）。它的存在是為了讓範例開箱即跑——換成 <code>ApiSolverEvaluator</code> 即可驅動真實求解器。本頁所有圖都是框架自己跑出來的。</p>
+    </div>
+  </section>
+
+  <!-- 11 comparison -->
+  <section id="compare">
+    <h2><span class="num">11 / Comparison</span><span class="en">meta-research vs autoresearch</span><span class="zh">meta-research 與 autoresearch 對照</span></h2>
+    <div class="tablewrap">
+      <table class="cmp">
+        <thead><tr><th>aspect / 面向</th><th>autoresearch</th><th>meta-research</th></tr></thead>
+        <tbody>
+          <tr><td>domain / 領域</td><td>LLM pre-training<span class="zh">語言模型預訓練</span></td><td>any engineering/scientific design<span class="zh">任意工程／科學設計</span></td></tr>
+          <tr><td>editable artifact / 可編輯產物</td><td>single <code>train.py</code><span class="zh">單一檔，原地修改</span></td><td><code>designs/</code> — a population<span class="zh">設計族群（複數）</span></td></tr>
+          <tr><td>evaluator / 評估器</td><td>fixed <code>evaluate_bpb</code><span class="zh">寫死的評估函式</span></td><td>pluggable: numerical / surrogate / API<span class="zh">可插拔三後端</span></td></tr>
+          <tr><td>objective / 目標</td><td>single scalar <code>val_bpb</code><span class="zh">單一純量</span></td><td>multi-objective Pareto frontier<span class="zh">多目標 Pareto 前緣</span></td></tr>
+          <tr><td>keep / discard</td><td>git advance / reset<span class="zh">前進或 reset 丟棄</span></td><td>append-only; Pareto membership<span class="zh">只增不刪；以前緣取捨</span></td></tr>
+          <tr><td>history / 歷史</td><td><code>results.tsv</code><span class="zh">扁平紀錄</span></td><td>full experience bundles + ledger<span class="zh">完整經驗 bundle + 帳本</span></td></tr>
+          <tr><td>diagnostic loop / 診斷閉環</td><td>scalar metric only<span class="zh">只有純量指標</span></td><td>agent re-reads heatmaps/fields<span class="zh">agent 讀回熱力圖／場</span></td></tr>
+          <tr><td>delivery / 交付形式</td><td>a repo + <code>program.md</code><span class="zh">一個 repo + program.md</span></td><td>a reusable Claude Code skill<span class="zh">可重用的 skill</span></td></tr>
+          <tr><td>progress.png</td><td>one curve<span class="zh">單一曲線</span></td><td>per-objective curves + Pareto plot<span class="zh">每目標曲線 + 前緣圖</span></td></tr>
+          <tr><td>shared spirit / 共同精神</td><td colspan="2" style="background:var(--paper2)">config-as-code · markdown-as-program · the agent runs the loop · never stop &nbsp;·&nbsp; <span class="zh">設定即程式碼 · markdown 即程式 · agent 自走 · 永不停</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 12 use -->
+  <section id="use">
+    <h2><span class="num">12 / Getting started</span><span class="en">From install to overnight run</span><span class="zh">從安裝到整夜自走</span></h2>
+    <ol class="loop">
+      <li><span class="en"><strong>Install the engine</strong> once: <code>pip install -e meta-research</code>.</span><span class="zh"><strong>安裝引擎</strong>一次：<code>pip install -e meta-research</code>。</span></li>
+      <li><span class="en"><strong>Scaffold an experiment</strong>: <code>meta-research init coldplate --from water_cooling</code> — copies the example, drops the skill into <code>.claude/skills/</code>, and <code>git init</code>s with an initial commit, ready to run.</span><span class="zh"><strong>建立實驗</strong>：<code>meta-research init coldplate --from water_cooling</code>——複製範例、把 skill 放進 <code>.claude/skills/</code>、並 <code>git init</code> + 初始 commit，立即可跑。</span></li>
+      <li><span class="en"><strong>Seed</strong> the baselines: <code>meta-research seed --commit</code>.</span><span class="zh"><strong>seed</strong> 基準設計：<code>meta-research seed --commit</code>。</span></li>
+      <li><span class="en"><strong>Open a coding agent</strong> in the directory and say "follow <code>program.md</code>." It loads the skill and starts the loop — proposing designs, reading heatmaps, committing, never stopping until you interrupt.</span><span class="zh"><strong>在該目錄開 coding agent</strong>，說「照 <code>program.md</code> 跑」。它載入 skill 並開始迴圈——提設計、讀熱力圖、commit，未被打斷前不停。</span></li>
+      <li><span class="en"><strong>Wake up</strong> to a Pareto frontier, a full git ledger, and <code>progress.png</code>.</span><span class="zh"><strong>起床</strong>看到一條 Pareto 前緣、完整的 git 帳本、以及 <code>progress.png</code>。</span></li>
+    </ol>
+  </section>
+
+  <!-- 13 refs -->
+  <section id="refs">
+    <h2><span class="num">13 / Appendix</span><span class="en">References &amp; notes</span><span class="zh">參考與附註</span></h2>
+    <ul class="refs">
+      <li><span class="en"><strong>Method.</strong> Lee, Nair, Zhang, Lee, Khattab, Finn. <em>Meta-Harness: End-to-End Optimization of Model Harnesses.</em> arXiv:2603.28052, 2026.</span><span class="zh"><strong>方法論。</strong>Lee 等人，<em>Meta-Harness: End-to-End Optimization of Model Harnesses</em>，arXiv:2603.28052，2026。</span></li>
+      <li><span class="en"><strong>Ergonomics.</strong> Karpathy. <em>autoresearch</em> — an LLM doing its own pre-training research overnight (built on <em>nanochat</em>).</span><span class="zh"><strong>人體工學。</strong>Karpathy，<em>autoresearch</em>——讓 LLM 整夜自己做預訓練研究（建構於 <em>nanochat</em>）。</span></li>
+      <li><span class="en"><strong>Contract.</strong> The repo's <code>DESIGN.md</code> is the authoritative architecture contract; every module is built against it.</span><span class="zh"><strong>合約。</strong>repo 內的 <code>DESIGN.md</code> 是權威的架構合約；每個模組都依它構建。</span></li>
+    </ul>
+    <h3>Environment / 環境</h3>
+    <p class="en">Python 3.10+; runtime deps numpy + matplotlib; optional extras for surrogate (joblib, onnxruntime) and api (requests). 84 tests pass. The numerical water-cooling model is a trend-correct surrogate built from standard textbook correlations, not a validated CFD solver.</p>
+    <p class="zh">Python 3.10+；執行相依 numpy + matplotlib；surrogate（joblib、onnxruntime）與 api（requests）為選用 extras。84 條測試通過。水冷數值模型是以標準教科書關聯式建構的趨勢正確代理，非經驗證的 CFD 求解器。</p>
+  </section>
+
+  <footer>
+    <p class="en"><strong>meta-research</strong> — built on the shoulders of two projects. This document and every figure in it were generated by the framework and its tooling.</p>
+    <p class="zh"><strong>meta-research</strong> —— 站在兩個專案的肩膀上。本文件與其中每一張圖，皆由框架及其工具生成。</p>
+    <p class="mono" style="color:var(--faint);font-size:12px;margin-top:14px">FONTS: Fraunces · Spectral · IBM Plex Mono · Noto Serif TC &nbsp;|&nbsp; THEME: thermal lab report</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var bar=document.getElementById('lang'), body=document.body;
+  bar.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    body.className='lang-'+b.dataset.l;
+    [].forEach.call(bar.children,function(x){x.classList.toggle('active',x===b)});
+  });
+})();
+</script>
+</body>
+</html>
