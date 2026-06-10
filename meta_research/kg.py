@@ -120,6 +120,14 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
                         "score_delta": score_delta(row["scores"], parent["scores"]),
                     }
                 )
+        for inspiration_name in row["inspired_by"]:
+            inspiration = _resolve(inspiration_name, row["iteration"], rows)
+            if inspiration is not None:
+                # Pure lineage pointer: no diff/delta/axis — cross-design diff
+                # semantics are undefined (locked decision Q4).
+                edges.append(
+                    {"kind": "inspired-by", "src": inspiration["id"], "dst": row["id"]}
+                )
 
     return {"nodes": nodes, "edges": edges, "warnings": warnings}
 
@@ -156,10 +164,18 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
                 },
                 "params": dict(spec_doc.get("params") or {}),
                 "parent": str(front.get("parent") or "").strip(),
+                "inspired_by": _split_names(front.get("inspired_by")),
                 "axis": str(front.get("axis") or ""),
             }
         )
     return rows
+
+
+def _split_names(raw: Any) -> list[str]:
+    """Parse the comma-separated ``inspired_by`` front-matter scalar (7.2)."""
+    if not raw:
+        return []
+    return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
 def _resolve(

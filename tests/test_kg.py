@@ -258,3 +258,31 @@ def test_baselines_without_parent_have_no_mutated_from_edge(tmp_path: Path) -> N
     graph = build_kg(tmp_path)
     assert graph["edges"] == []
     assert graph["warnings"] == []
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — inspired-by edges (multi-parent lineage, pure pointers)
+# --------------------------------------------------------------------------- #
+def test_inspired_by_yields_pure_lineage_pointers(tmp_path: Path) -> None:
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(tmp_path, 0, "straight_fins", params={"fin_type": "straight"}, scores=scores)
+    _record_bundle(tmp_path, 1, "pin_fins", params={"fin_type": "pin"}, scores=scores)
+    _record_bundle(
+        tmp_path,
+        2,
+        "hybrid_fins",
+        params={"fin_type": "pin"},
+        scores=scores,
+        parent="pin_fins",
+        inspired_by=["straight_fins"],
+    )
+
+    graph = build_kg(tmp_path)
+
+    inspired = [e for e in graph["edges"] if e["kind"] == "inspired-by"]
+    # Pure pointer: src/dst/kind only — cross-design diffs are undefined (Q4).
+    assert inspired == [
+        {"kind": "inspired-by", "src": "000_straight_fins", "dst": "002_hybrid_fins"}
+    ]
+    # The primary mutated-from edge coexists with the inspiration pointers.
+    assert [e["kind"] for e in graph["edges"]].count("mutated-from") == 1
