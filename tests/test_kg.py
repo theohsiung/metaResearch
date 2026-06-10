@@ -381,3 +381,39 @@ def test_write_kg_replaces_stale_or_corrupt_file(tmp_path: Path) -> None:
 
     doc = json.loads(path.read_text(encoding="utf-8"))
     assert [n["id"] for n in doc["nodes"]] == ["000_straight_fins"]
+
+
+# --------------------------------------------------------------------------- #
+# CLI — `meta-research kg` backfill (no prepare.py required)
+# --------------------------------------------------------------------------- #
+def test_cli_kg_backfills_existing_experiment_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import json
+
+    from meta_research.cli import main
+
+    # A pre-KG experiment dir: bundles exist, no kg.json, no prepare.py.
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(tmp_path, 0, "pin_fins", params={"fin_type": "pin"}, scores=scores)
+    _record_bundle(
+        tmp_path,
+        1,
+        "staggered_pin_v1",
+        params={"fin_type": "pin", "arrangement": "staggered"},
+        scores=scores,
+        parent="pin_fins",
+    )
+
+    rc = main(["kg", "--run-dir", str(tmp_path)])
+
+    assert rc == 0
+    doc = json.loads((tmp_path / "kg.json").read_text(encoding="utf-8"))
+    assert doc["version"] == 1
+    assert len(doc["nodes"]) == 2
+    assert len(doc["edges"]) == 1
+
+    out = capsys.readouterr().out
+    assert "2 nodes" in out
+    assert "1 edges" in out
+    assert "0 warnings" in out

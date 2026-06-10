@@ -7,6 +7,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research eval <design> [--commit] [--run-dir DIR] [--hypothesis FILE]
     meta-research seed [--commit] [--run-dir DIR]
     meta-research frontier [--run-dir DIR]
+    meta-research kg [--run-dir DIR]
     meta-research progress [--out DIR] [--run-dir DIR]
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
@@ -272,6 +273,37 @@ def cmd_frontier(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_kg(args: argparse.Namespace) -> int:
+    """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
+
+    A pure ledger read like `frontier`: no prepare.py required. Useful to
+    backfill kg.json for experiment dirs whose bundles predate the KG; during
+    normal operation every eval/seed already rebuilds it.
+    """
+    run_dir = Path(args.run_dir).resolve()
+    # Lazy import keeps cli import light and mirrors cmd_progress.
+    from .kg import write_kg
+
+    try:
+        path = write_kg(run_dir)
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        _err(f"could not rebuild the knowledge graph: {exc}")
+        return 1
+
+    nodes = data.get("nodes", [])
+    edges = data.get("edges", [])
+    warnings = data.get("warnings", [])
+    print(
+        logfmt.bold("knowledge graph: ")
+        + f"{len(nodes)} nodes, {len(edges)} edges, {len(warnings)} warnings"
+    )
+    print(f"  {logfmt.cyan(str(path))}")
+    for warning in warnings:
+        print(logfmt.yellow(f"  warning: {warning}"))
+    return 0
+
+
 def cmd_progress(args: argparse.Namespace) -> int:
     """`meta-research progress` — plot best-so-far curves + Pareto evolution (DESIGN §6.5).
 
@@ -462,6 +494,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_front = sub.add_parser("frontier", help="print the current Pareto frontier")
     add_run_dir(p_front)
     p_front.set_defaults(func=cmd_frontier)
+
+    p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
+    add_run_dir(p_kg)
+    p_kg.set_defaults(func=cmd_kg)
 
     p_prog = sub.add_parser("progress", help="plot best-so-far curves + Pareto evolution (progress.png)")
     p_prog.add_argument("--out", default=None, help="output dir for PNGs (default: run dir)")
