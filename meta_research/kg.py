@@ -137,6 +137,10 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
                 {"kind": "inspired-by", "src": inspiration["id"], "dst": row["id"]}
             )
 
+    # Deterministic output: rebuilds of the same ledger are byte-identical, so
+    # the committed kg.json diffs cleanly in git across iterations.
+    nodes.sort(key=lambda n: (n["iteration"], n["name"]))
+    edges.sort(key=lambda e: (e["dst"], e["kind"], e["src"]))
     return {"nodes": nodes, "edges": edges, "warnings": warnings}
 
 

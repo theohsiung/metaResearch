@@ -313,3 +313,30 @@ def test_unresolvable_lineage_names_surface_as_warnings(tmp_path: Path) -> None:
     assert "000_typo_child" in parent_warning
     ghost_warning = next(w for w in graph["warnings"] if "ghost_design" in w)
     assert "000_typo_child" in ghost_warning
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — deterministic output (clean git diffs across iterations)
+# --------------------------------------------------------------------------- #
+def test_rebuild_is_deterministic_and_ordered(tmp_path: Path) -> None:
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(tmp_path, 0, "straight_fins", params={"fin_type": "straight"}, scores=scores)
+    _record_bundle(tmp_path, 1, "pin_fins", params={"fin_type": "pin"}, scores=scores)
+    _record_bundle(
+        tmp_path,
+        2,
+        "hybrid_fins",
+        params={"fin_type": "pin"},
+        scores=scores,
+        parent="pin_fins",
+        inspired_by=["straight_fins"],
+    )
+
+    first = build_kg(tmp_path)
+    second = build_kg(tmp_path)
+
+    assert first == second
+    node_keys = [(n["iteration"], n["name"]) for n in first["nodes"]]
+    assert node_keys == sorted(node_keys)
+    edge_keys = [(e["dst"], e["kind"], e["src"]) for e in first["edges"]]
+    assert edge_keys == sorted(edge_keys)
