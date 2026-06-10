@@ -32,12 +32,17 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 
 1. **Inspect experience** (never skip): run `meta-research frontier`, read
    `results.tsv` (the authoritative timeline), and run `meta-research progress` to
-   refresh the best-so-far curves + Pareto plot. Then **`Read` the actual
-   `heatmap.png`** (or whatever diagnostic the evaluator emits) AND the
+   refresh the best-so-far curves + Pareto plot. `Read` `kg.json` (the derived
+   knowledge graph: one node per candidate, lineage edges carrying `param_diff` →
+   `score_delta` facts) to **locate** which prior candidates are relevant — which
+   knob changes moved which objectives, which mechanism axes were explored. The KG
+   is a **navigation index only**: follow its `bundle` pointers and **`Read` the
+   actual `heatmap.png`** (or whatever diagnostic the evaluator emits) AND the
    `hypothesis.md` of the frontier members, the most recent candidates, and the
    failures. Read `experience/<dir>/design.py` directly for any prior source —
    bundles are append-only files on disk, never rewritten (git is the audit/backup
-   layer, not your query interface). The diagnostic image tells you *where* the
+   layer, not your query interface). Every hypothesis must cite bundles you
+   actually read, never the KG alone. The diagnostic image tells you *where* the
    design is failing — that is how the loop closes.
 2. **Form ONE falsifiable hypothesis** targeting a **mechanism**, not a parameter
    value (see REFERENCE.md mechanism axes). Name the failure mode the diagnostic
@@ -48,7 +53,7 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    spending an evaluation.
 4. **Evaluate + commit**: write `hyp.json` (schema in REFERENCE.md: axis, parent,
    change — the one-line "what was changed", it becomes the commit/TSV summary —
-   expected, reasoning), then
+   optional inspired_by, expected, reasoning), then
    `meta-research eval <name> --hypothesis hyp.json --commit`. Your raw thinking
    for the iteration is auto-captured into the bundle's
    `trace/proposer_thinking.md`; `hypothesis.md` stays the curated hand-off.

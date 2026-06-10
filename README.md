@@ -97,8 +97,9 @@ The deterministic CLI steps the agent calls each iteration:
 
 ```bash
 meta-research seed [--commit]                                # Phase 0: evaluate all baselines
-meta-research eval <design> --hypothesis hyp.json --commit   # score one design, store, frontier, commit
+meta-research eval <design> --hypothesis hyp.json --commit   # score one design, store, frontier, kg, commit
 meta-research frontier                                       # print the current Pareto set + best per objective
+meta-research kg                                             # rebuild kg.json (derived knowledge graph) from the ledger
 meta-research init <name>                                    # scaffold a new experiment dir
 ```
 
@@ -138,8 +139,9 @@ meta-research/
     frontier.py             # Pareto: dominates(), pareto_front(), update_frontier(), classify()
     candidates.py           # load + validate + build a design module from designs/
     experience.py           # experience-bundle store + git APPEND-ONLY ledger
-    runner.py               # evaluate_and_record(): score -> bundle -> frontier -> tsv -> (opt) commit
-    cli.py                  # `meta-research eval|seed|frontier|init`
+    kg.py                   # derived knowledge graph: build_kg()/write_kg() -> kg.json
+    runner.py               # evaluate_and_record(): score -> bundle -> frontier -> kg -> tsv -> (opt) commit
+    cli.py                  # `meta-research eval|seed|frontier|kg|init`
     evaluators/
       __init__.py           # re-export the three adapters
       numerical.py          # NumericalEvaluator: wrap a pure-python simulate() callable
@@ -164,12 +166,16 @@ meta-research/
 ## How it runs
 
 The framework provides **deterministic tools**; the **agent runs the loop**. Each iteration the
-agent: inspects the full experience ledger (including reading the actual `heatmap.png` images
-and `hypothesis.md` files of frontier / recent / failed candidates) → forms one falsifiable
-*mechanism-level* hypothesis (not a parameter tweak) → writes a single design module → dry-runs
-`build()` + feasibility → calls `meta-research eval --hypothesis hyp.json --commit` → reads the
-new diagnostics → notes whether it extended the Pareto frontier → repeats. It never stops until
-interrupted, never `git reset`s, and never declares the frontier "optimal".
+agent: inspects the full experience ledger — using `kg.json` (a derived knowledge graph: one
+node per candidate, lineage edges carrying param-diff → score-delta facts) to *locate* the
+relevant bundles, then reading the actual `heatmap.png` images and `hypothesis.md` files of
+frontier / recent / failed candidates → forms one falsifiable *mechanism-level* hypothesis
+(not a parameter tweak) → writes a single design module → dry-runs `build()` + feasibility →
+calls `meta-research eval --hypothesis hyp.json --commit` → reads the new diagnostics → notes
+whether it extended the Pareto frontier → repeats. It never stops until interrupted, never
+`git reset`s, and never declares the frontier "optimal". The KG is rebuilt deterministically
+by the engine on every eval — it is a navigation index over the bundles, never a substitute
+for reading them.
 
 See [`DESIGN.md`](./DESIGN.md) for the binding architecture contract and
 [`skills/meta-research/SKILL.md`](./skills/meta-research/SKILL.md) for the loop the agent runs.

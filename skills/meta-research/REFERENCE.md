@@ -124,6 +124,7 @@ iteration: 12
 axis: arrangement              # one of the mechanism axes in §1
 parent: pin_fins               # what it builds on (free-form, NOT a selection rule)
 change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
+inspired_by: straight_fins, old_v2   # optional: other candidates whose evidence you drew on
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -139,6 +140,7 @@ You write the design module, then pass this JSON; the runner folds it into
   "axis": "arrangement",
   "parent": "pin_fins",
   "change": "inline -> staggered pin rows over the outlet half",
+  "inspired_by": ["straight_fins"],
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9 heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
@@ -147,7 +149,10 @@ You write the design module, then pass this JSON; the runner folds it into
 trace Meta-Harness depends on. Make it specific and falsifiable. `change` is the
 one-line "what was changed vs the parent" — it becomes the commit subject's summary
 and the `results.tsv` description (`expected` is the fallback when absent), so keep
-it concrete: name the mechanism before and after, not the hoped-for effect.
+it concrete: name the mechanism before and after, not the hoped-for effect. `parent`
+is the single design you mutated; `inspired_by` (optional) credits other candidates
+whose evidence shaped the hypothesis — both feed the knowledge graph's lineage
+edges (§5).
 
 ---
 
@@ -187,6 +192,16 @@ it concrete: name the mechanism before and after, not the hoped-for effect.
   objective), `results.tsv` (flat timeline), and the bundles themselves —
   `experience/<dir>/design.py`, `hypothesis.md`, `trace/heatmap.png` — read them
   directly from disk; they are never rewritten.
+- **`kg.json` is the derived knowledge graph** — rebuilt deterministically from the
+  bundles on every eval (`meta-research kg` backfills older runs). One node per
+  candidate (`id`, `iteration`, `name`, `status`, `scores`, `bundle` pointer); edges
+  are **facts only**: `mutated-from` (parent → child, with `param_diff` — the knobs
+  changed/added/removed — and `score_delta` per objective) and `inspired-by` (pure
+  lineage pointers from `inspired_by`). Use it to *find* which bundles answer "what
+  happened when this knob moved?" — then follow the `bundle` pointer and read the
+  actual heatmap + `hypothesis.md`. **Never** treat the KG as a substitute for the
+  raw experience: edges are single observations under one context, evidence, not
+  rules; interpretation lives only in the bundles.
 - `frontier.json` shape:
 ```json
 {

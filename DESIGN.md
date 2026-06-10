@@ -81,8 +81,9 @@ meta-research/
     frontier.py             # Pareto: dominates(), pareto_front(), update_frontier(), classify()
     candidates.py           # load + validate + build a design module from designs/
     experience.py           # experience-bundle store + git APPEND-ONLY ledger
-    runner.py               # evaluate_and_record(): score one design -> bundle -> frontier -> results.tsv -> (opt) commit
-    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `init`
+    kg.py                   # derived knowledge graph: build_kg(), write_kg() -> kg.json (§7.6)
+    runner.py               # evaluate_and_record(): score one design -> bundle -> frontier -> kg -> results.tsv -> (opt) commit
+    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `init`
     evaluators/
       __init__.py           # re-export the three adapters
       numerical.py          # NumericalEvaluator: wrap a pure-python simulate() callable
@@ -108,7 +109,8 @@ meta-research/
     test_interfaces.py
     test_frontier.py
     test_experience.py
-    test_runner.py          # eval one design -> bundle written, frontier + tsv updated, append-only commit
+    test_kg.py              # param_diff/score_delta, build_kg nodes/edges/warnings, write_kg, CLI kg
+    test_runner.py          # eval one design -> bundle written, frontier + kg + tsv updated, append-only commit
     test_water_cooling.py
 ```
 
@@ -234,9 +236,12 @@ commit: bool = False, tag: str | None = None) -> EvalResult`:
 2. `evaluator = experiment.make_evaluator()`; `result = evaluator.evaluate(design, bundle/trace)`.
 3. `experience.record(iteration=next_iteration(), name, design_src, design, result, hypothesis)`.
 4. `update_frontier(run_dir, experiment.OBJECTIVES)`; `classify` the candidate.
-5. append a `results.tsv` row.
-6. if `commit`: `ensure_branch(tag)` then `commit(<message>)` — append-only.
-7. return the `EvalResult` (the CLI prints scores + the heatmap path).
+5. `write_kg(run_dir)` — rebuild the derived knowledge graph (§7.6) from the
+   bundles; a failure attaches `kg_error` to `result.metadata`, never sinks the step.
+6. append a `results.tsv` row.
+7. if `commit`: `ensure_branch(tag)` then `commit(<message>)` — append-only
+   (`kg.json` rides in the same commit).
+8. return the `EvalResult` (the CLI prints scores + the heatmap path).
 
 `seed_baselines(experiment, run_dir, *, commit=False)` — evaluate every
 `experiment.BASELINES` design once to seed the population + frontier (Phase 0).
@@ -251,6 +256,10 @@ from `./<DESIGNS_DIR>/`:
   `heatmap.png` path, and whether it extends the Pareto frontier.
 - `meta-research seed [--commit]` — run `seed_baselines` (Phase 0).
 - `meta-research frontier` — print the current `frontier.json` (Pareto set + best per objective).
+- `meta-research kg` — rebuild `kg.json` from the experience ledger and print node /
+  edge / warning counts. A pure ledger read (no `prepare.py` needed, like `frontier`);
+  exists to backfill experiment dirs whose bundles predate the KG — every eval/seed
+  already rebuilds it.
 - `meta-research init <name>` — scaffold a new experiment dir (prepare.py stub, designs/,
   program.md, plus a copy of the skill) — thin, optional.
 - Console script: `meta-research = meta_research.cli:main`.
@@ -298,6 +307,7 @@ iteration: 12
 axis: flow_arrangement          # mechanism axis (see SKILL.md)
 parent: pin_fins                # what it builds on (free-form, NOT a selection rule)
 change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
+inspired_by: straight_fins, old_v2   # optional, comma-separated: other candidates drawn on
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -313,12 +323,15 @@ design module `designs/<name>.py`, then calls `meta-research eval <name>
   "axis": "flow_arrangement",
   "parent": "pin_fins",
   "change": "inline -> staggered pin rows over the outlet half",
+  "inspired_by": ["straight_fins"],
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9's heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
 ```
 `runner` folds this into `hypothesis.md` (schema 7.2). `--hypothesis` is optional but
-the skill requires it (it is the reasoning trace).
+the skill requires it (it is the reasoning trace). `parent` is the single design
+mutated; `inspired_by` (optional list) credits other candidates whose evidence shaped
+the hypothesis — both feed the knowledge graph's lineage edges (§7.6).
 
 ### 7.4 `frontier.json`
 ```json
@@ -344,6 +357,58 @@ iter	name	status	feasible	thermal_resistance	pressure_drop	hypothesis
 0	straight_fins	frontier	true	0.061	410.0	baseline straight fins
 12	staggered_pin_v3	frontier	true	0.042	820.0	stagger pins over hot zone
 ```
+
+### 7.6 `kg.json` — the derived knowledge graph
+
+A **purely derived navigation index** over the experience bundles: the engine
+(`meta_research/kg.py`) rebuilds it deterministically from the ledger on every
+recorded evaluation (`runner` step 5) and via `meta-research kg` (backfill). The
+agent **reads** it to locate relevant bundles; it never writes it. Like
+`frontier.json`, it is a recomputed view — bundles stay the single source of truth,
+so a rebuild is always self-healing. Content is **facts only** (no prose, no
+summaries — Meta-Harness forbids replacing raw experience with summaries; an index
+of facts is navigation, not substitution).
+
+```json
+{
+  "version": 1,
+  "nodes": [
+    {"id": "012_staggered_pin_v3", "iteration": 12, "name": "staggered_pin_v3",
+     "status": "frontier",
+     "scores": {"thermal_resistance": 0.042, "pressure_drop": 820.0},
+     "bundle": "experience/012_staggered_pin_v3"}
+  ],
+  "edges": [
+    {"kind": "mutated-from", "src": "001_pin_fins", "dst": "012_staggered_pin_v3",
+     "axis": "flow_arrangement",
+     "param_diff": {"changed": {"arrangement": ["inline", "staggered"]},
+                    "added": {}, "removed": {}},
+     "score_delta": {"thermal_resistance": -0.019, "pressure_drop": 230.0}},
+    {"kind": "inspired-by", "src": "000_straight_fins", "dst": "012_staggered_pin_v3"}
+  ],
+  "warnings": ["005_typo_child: parent 'strait_fins' not found in prior bundles"]
+}
+```
+
+Pinned semantics:
+
+- **Node** = one evaluated candidate (every status — kept, dominated, infeasible,
+  crashed). `id` = bundle dirname; `bundle` = run-dir-relative pointer the agent
+  follows to read the full experience.
+- **`mutated-from`** (≤ 1 per node): from front-matter `parent`, resolved to the
+  **latest bundle of that name with iteration < child's**. Carries `axis` (the
+  child's label), `param_diff` (shallow top-level diff of `DesignSpec.params`:
+  `changed {key: [old,new]}` / `added` / `removed`; non-scalar values compare as
+  opaque wholes) and `score_delta` (child − parent per child score key; `null`
+  where the parent lacks the key).
+- **`inspired-by`** (0..n per node): from front-matter `inspired_by`; pure lineage
+  pointers — no diff payload (cross-design diff semantics are undefined).
+- **Unresolvable names** go to `warnings` (never silent, never fatal). Malformed
+  bundles are skipped with a warning.
+- **Deterministic**: nodes sorted by `(iteration, name)`, edges by
+  `(dst, kind, src)`; rebuilds of the same ledger are byte-identical.
+- **Failure isolation**: a KG write failure attaches `kg_error` to
+  `result.metadata` and never sinks the evaluation step.
 
 ## 8. Evaluator adapters (`meta_research/evaluators/`)
 
