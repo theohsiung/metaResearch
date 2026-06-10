@@ -30,6 +30,7 @@ from .interfaces import (
 )
 from .frontier import dominates, pareto_front, update_frontier
 from .experience import Experience
+from .kg import build_kg
 from .runner import evaluate_and_record, seed_baselines
 
 __version__ = "0.1.0"
@@ -47,6 +48,8 @@ __all__ = [
     "update_frontier",
     # experience
     "Experience",
+    # knowledge graph
+    "build_kg",
     # runner
     "evaluate_and_record",
     "seed_baselines",

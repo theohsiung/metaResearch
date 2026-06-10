@@ -14,7 +14,20 @@ from the ledger — derived views are recomputed, only bundles are appended.
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Any
+
+from meta_research.experience import (
+    EXPERIENCE_DIRNAME,
+    HYPOTHESIS_FILENAME,
+    RESULT_FILENAME,
+    _BUNDLE_RE,
+    _read_hypothesis,
+    _read_json,
+)
+
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------------
 # Fact extraction helpers
@@ -56,4 +69,56 @@ def score_delta(
     }
 
 
-__all__ = ["param_diff", "score_delta"]
+# ----------------------------------------------------------------------------
+# Building the graph from the ledger
+# ----------------------------------------------------------------------------
+
+
+def build_kg(run_dir: Path | str) -> dict[str, Any]:
+    """Derive the knowledge graph from the experience bundles under ``run_dir``.
+
+    Pure read: one node per parseable bundle (kept, dominated, infeasible, or
+    crashed — store everything). Malformed bundles are skipped with a
+    ``warnings`` entry; an absent/empty ``experience/`` dir yields an empty
+    graph. Never raises for ledger content problems.
+    """
+    run_dir = Path(run_dir)
+    experience_dir = run_dir / EXPERIENCE_DIRNAME
+
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    if not experience_dir.is_dir():
+        return {"nodes": nodes, "edges": edges, "warnings": warnings}
+
+    for entry in sorted(experience_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        match = _BUNDLE_RE.match(entry.name)
+        if match is None:
+            continue
+        result_doc = _read_json(entry / RESULT_FILENAME)
+        if result_doc is None:
+            warnings.append(f"{entry.name}: missing/invalid {RESULT_FILENAME}; skipped")
+            continue
+        front, _prose = _read_hypothesis(entry / HYPOTHESIS_FILENAME)
+        nodes.append(
+            {
+                "id": entry.name,
+                "iteration": int(match.group("iter")),
+                "name": match.group("name"),
+                "status": str(result_doc.get("status") or front.get("status") or ""),
+                "scores": {
+                    k: float(v)
+                    for k, v in (result_doc.get("scores") or {}).items()
+                    if isinstance(v, (int, float))
+                },
+                "bundle": f"{EXPERIENCE_DIRNAME}/{entry.name}",
+            }
+        )
+
+    return {"nodes": nodes, "edges": edges, "warnings": warnings}
+
+
+__all__ = ["param_diff", "score_delta", "build_kg"]

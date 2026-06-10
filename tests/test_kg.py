@@ -8,9 +8,59 @@ never writes it.
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import pytest
 
+from meta_research import build_kg
+from meta_research.experience import Experience
+from meta_research.interfaces import DesignSpec, EvalResult, Objective
 from meta_research.kg import param_diff, score_delta
+
+OBJECTIVES: list[Objective] = [
+    Objective("thermal_resistance", "min", "K/W"),
+    Objective("pressure_drop", "min", "Pa"),
+]
+
+
+def _record_bundle(
+    run_dir: Path,
+    iteration: int,
+    name: str,
+    *,
+    params: dict[str, Any],
+    scores: dict[str, float] | None = None,
+    status: str = "dominated",
+    parent: str = "",
+    axis: str = "geometry",
+    inspired_by: list[str] | None = None,
+    error: str | None = None,
+    feasible: bool = True,
+) -> None:
+    """Write a real schema-7.1 bundle through the store (the honest fixture)."""
+    exp = Experience(run_dir, OBJECTIVES)
+    if error is not None:
+        result = EvalResult.crashed(error)
+    else:
+        result = EvalResult(scores=dict(scores or {}), feasible=feasible)
+    hypothesis: dict[str, Any] = {
+        "axis": axis,
+        "parent": parent,
+        "expected": "",
+        "reasoning": "test bundle",
+        "status": status,
+    }
+    if inspired_by is not None:
+        hypothesis["inspired_by"] = inspired_by
+    exp.record(
+        iteration=iteration,
+        name=name,
+        design_src_path=run_dir / "no_such_module.py",
+        design=DesignSpec(params=dict(params)),
+        result=result,
+        hypothesis=hypothesis,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -76,3 +126,52 @@ def test_score_delta_null_where_parent_lacks_score() -> None:
         "thermal_resistance": None,
         "pressure_drop": None,
     }
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — nodes (store everything; design.md §3)
+# --------------------------------------------------------------------------- #
+def test_build_kg_yields_one_node_per_bundle_including_failures(
+    tmp_path: Path,
+) -> None:
+    _record_bundle(
+        tmp_path,
+        0,
+        "straight_fins",
+        params={"fin_type": "straight", "n_fins": 20},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 410.0},
+        status="frontier",
+    )
+    _record_bundle(tmp_path, 1, "bad_fins", params={}, error="boom")
+    _record_bundle(
+        tmp_path,
+        2,
+        "too_thin",
+        params={"fin_type": "straight", "fin_thickness_mm": 0.1},
+        scores={"thermal_resistance": 0.05, "pressure_drop": 900.0},
+        feasible=False,
+    )
+
+    graph = build_kg(tmp_path)
+
+    assert [n["id"] for n in graph["nodes"]] == [
+        "000_straight_fins",
+        "001_bad_fins",
+        "002_too_thin",
+    ]
+    baseline = graph["nodes"][0]
+    assert baseline == {
+        "id": "000_straight_fins",
+        "iteration": 0,
+        "name": "straight_fins",
+        "status": "frontier",
+        "scores": {"thermal_resistance": 0.061, "pressure_drop": 410.0},
+        "bundle": "experience/000_straight_fins",
+    }
+    statuses = {n["id"]: n["status"] for n in graph["nodes"]}
+    assert statuses["001_bad_fins"] == "crash"
+    assert statuses["002_too_thin"] == "infeasible"
+
+
+def test_build_kg_empty_run_dir_is_empty_graph(tmp_path: Path) -> None:
+    assert build_kg(tmp_path) == {"nodes": [], "edges": [], "warnings": []}
