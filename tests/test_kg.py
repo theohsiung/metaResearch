@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from meta_research.kg import param_diff
+from meta_research.kg import param_diff, score_delta
 
 
 # --------------------------------------------------------------------------- #
@@ -56,3 +56,23 @@ def test_param_diff_values_kept_verbatim_and_non_scalars_opaque() -> None:
     assert diff["changed"] == {"fin_rows": [[2, 4, 6], [2, 4, 8]]}
     assert diff["added"] == {}
     assert diff["removed"] == {}
+
+
+# --------------------------------------------------------------------------- #
+# score_delta — per-objective child − parent (design.md §2)
+# --------------------------------------------------------------------------- #
+def test_score_delta_is_child_minus_parent() -> None:
+    child = {"thermal_resistance": 0.042, "pressure_drop": 820.0}
+    parent = {"thermal_resistance": 0.061, "pressure_drop": 410.0}
+    delta = score_delta(child, parent)
+    assert delta["thermal_resistance"] == pytest.approx(0.042 - 0.061)
+    assert delta["pressure_drop"] == pytest.approx(410.0)
+
+
+def test_score_delta_null_where_parent_lacks_score() -> None:
+    # A crashed parent recorded no scores: the delta is a fact we cannot state.
+    child = {"thermal_resistance": 0.042, "pressure_drop": 820.0}
+    assert score_delta(child, {}) == {
+        "thermal_resistance": None,
+        "pressure_drop": None,
+    }

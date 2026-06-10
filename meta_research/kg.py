@@ -42,4 +42,18 @@ def param_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     return {"changed": changed, "added": added, "removed": removed}
 
 
-__all__ = ["param_diff"]
+def score_delta(
+    child: dict[str, float], parent: dict[str, float]
+) -> dict[str, float | None]:
+    """Per-objective ``child − parent`` over the child's score keys.
+
+    ``None`` where the parent lacks the key (e.g. a crashed parent recorded no
+    scores). A raw fact — optimization direction lives in ``Objective``, not here.
+    """
+    return {
+        key: (value - parent[key]) if key in parent else None
+        for key, value in child.items()
+    }
+
+
+__all__ = ["param_diff", "score_delta"]
