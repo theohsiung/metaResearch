@@ -287,7 +287,7 @@ def cmd_kg(args: argparse.Namespace) -> int:
     try:
         path = write_kg(run_dir)
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
+    except (OSError, TypeError, ValueError) as exc:
         _err(f"could not rebuild the knowledge graph: {exc}")
         return 1
 

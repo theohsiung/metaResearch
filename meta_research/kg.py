@@ -14,7 +14,7 @@ from the ledger — derived views are recomputed, only bundles are appended.
 
 from __future__ import annotations
 
-import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +28,6 @@ from meta_research.experience import (
     _read_json,
     _write_json,
 )
-
-logger = logging.getLogger(__name__)
 
 #: The derived knowledge-graph file, sibling of frontier.json / results.tsv.
 KG_FILENAME = "kg.json"
@@ -169,24 +167,39 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
             continue
         spec_doc = _read_json(entry / DESIGN_SPEC_FILENAME) or {}
         front, _prose = _read_hypothesis(entry / HYPOTHESIS_FILENAME)
-        rows.append(
-            {
-                "id": entry.name,
-                "iteration": int(match.group("iter")),
-                "name": match.group("name"),
-                "status": str(result_doc.get("status") or front.get("status") or ""),
-                "scores": {
-                    k: float(v)
-                    for k, v in (result_doc.get("scores") or {}).items()
-                    if isinstance(v, (int, float))
-                },
-                "params": dict(spec_doc.get("params") or {}),
-                "parent": str(front.get("parent") or "").strip(),
-                "inspired_by": _split_names(front.get("inspired_by")),
-                "axis": str(front.get("axis") or ""),
-            }
-        )
+        try:
+            rows.append(
+                {
+                    "id": entry.name,
+                    "iteration": int(match.group("iter")),
+                    "name": match.group("name"),
+                    "status": str(result_doc.get("status") or front.get("status") or ""),
+                    "scores": _finite_scores(result_doc.get("scores")),
+                    "params": dict(spec_doc.get("params") or {}),
+                    "parent": str(front.get("parent") or "").strip(),
+                    "inspired_by": _split_names(front.get("inspired_by")),
+                    "axis": str(front.get("axis") or ""),
+                }
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            # One type-confused bundle must not abort the whole rebuild — keep
+            # every healthy bundle and stay loud about the broken one.
+            warnings.append(f"{entry.name}: malformed bundle content; skipped ({exc})")
     return rows
+
+
+def _finite_scores(raw: Any) -> dict[str, float]:
+    """Extract finite numeric scores; NaN/Infinity are absent facts, not values.
+
+    ``kg.json`` must stay strict RFC-8259 JSON (no ``NaN``/``Infinity``
+    literals), and ``score_delta`` arithmetic over non-finite inputs would
+    manufacture meaningless deltas.
+    """
+    return {
+        k: float(v)
+        for k, v in dict(raw or {}).items()
+        if isinstance(v, (int, float)) and math.isfinite(v)
+    }
 
 
 def _split_names(raw: Any) -> list[str]:

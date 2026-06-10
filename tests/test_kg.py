@@ -384,6 +384,58 @@ def test_write_kg_replaces_stale_or_corrupt_file(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# build_kg — hardening against malformed ledger content (review findings)
+# --------------------------------------------------------------------------- #
+def test_malformed_bundle_content_is_skipped_with_warning_not_fatal(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(tmp_path, 0, "good", params={"fin_type": "pin"}, scores=scores)
+    _record_bundle(tmp_path, 1, "bad", params={"fin_type": "pin"}, scores=scores)
+    # Corrupt bundle 1 with type-confused content: scores is a string, params too.
+    bad = tmp_path / "experience" / "001_bad"
+    (bad / "result.json").write_text(
+        json.dumps({"scores": "n/a", "status": "crash"}), encoding="utf-8"
+    )
+    (bad / "design_spec.json").write_text(
+        json.dumps({"params": "flat"}), encoding="utf-8"
+    )
+
+    graph = build_kg(tmp_path)
+
+    # The rebuild survives, keeps every healthy bundle, and is loud about the bad one.
+    assert [n["id"] for n in graph["nodes"]] == ["000_good"]
+    assert any("001_bad" in w for w in graph["warnings"])
+
+
+def test_non_finite_scores_are_excluded_and_kg_json_stays_strict(
+    tmp_path: Path,
+) -> None:
+    import json
+
+    _record_bundle(
+        tmp_path,
+        0,
+        "weird",
+        params={"fin_type": "pin"},
+        scores={"thermal_resistance": float("inf"), "pressure_drop": 500.0},
+    )
+
+    graph = build_kg(tmp_path)
+    assert graph["nodes"][0]["scores"] == {"pressure_drop": 500.0}
+
+    # The persisted file must be strict RFC-8259 JSON: no NaN/Infinity literals.
+    path = write_kg(tmp_path)
+
+    def _reject(constant: str) -> None:
+        raise AssertionError(f"non-finite literal {constant!r} written to kg.json")
+
+    json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject)
+
+
+# --------------------------------------------------------------------------- #
 # CLI — `meta-research kg` backfill (no prepare.py required)
 # --------------------------------------------------------------------------- #
 def test_cli_kg_backfills_existing_experiment_dir(
