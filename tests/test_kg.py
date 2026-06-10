@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from meta_research import build_kg
+from meta_research import build_kg, write_kg
 from meta_research.experience import Experience
 from meta_research.interfaces import DesignSpec, EvalResult, Objective
 from meta_research.kg import param_diff, score_delta
@@ -340,3 +340,44 @@ def test_rebuild_is_deterministic_and_ordered(tmp_path: Path) -> None:
     assert node_keys == sorted(node_keys)
     edge_keys = [(e["dst"], e["kind"], e["src"]) for e in first["edges"]]
     assert edge_keys == sorted(edge_keys)
+
+
+# --------------------------------------------------------------------------- #
+# write_kg — versioned, self-healing persistence (design.md §4)
+# --------------------------------------------------------------------------- #
+def test_write_kg_persists_versioned_graph(tmp_path: Path) -> None:
+    import json
+
+    _record_bundle(
+        tmp_path,
+        0,
+        "straight_fins",
+        params={"fin_type": "straight"},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 410.0},
+        status="frontier",
+    )
+
+    path = write_kg(tmp_path)
+
+    assert path == tmp_path / "kg.json"
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert doc["version"] == 1
+    assert {**doc, "version": doc["version"]} == {"version": 1, **build_kg(tmp_path)}
+
+
+def test_write_kg_replaces_stale_or_corrupt_file(tmp_path: Path) -> None:
+    import json
+
+    (tmp_path / "kg.json").write_text("{ this is not even JSON", encoding="utf-8")
+    _record_bundle(
+        tmp_path,
+        0,
+        "straight_fins",
+        params={"fin_type": "straight"},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 410.0},
+    )
+
+    path = write_kg(tmp_path)
+
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert [n["id"] for n in doc["nodes"]] == ["000_straight_fins"]

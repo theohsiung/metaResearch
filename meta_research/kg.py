@@ -26,9 +26,15 @@ from meta_research.experience import (
     _BUNDLE_RE,
     _read_hypothesis,
     _read_json,
+    _write_json,
 )
 
 logger = logging.getLogger(__name__)
+
+#: The derived knowledge-graph file, sibling of frontier.json / results.tsv.
+KG_FILENAME = "kg.json"
+#: Schema version stamped into the written file (DESIGN §7.6).
+KG_VERSION = 1
 
 # ----------------------------------------------------------------------------
 # Fact extraction helpers
@@ -209,4 +215,16 @@ def _resolve(
     return max(candidates, key=lambda row: row["iteration"])
 
 
-__all__ = ["param_diff", "score_delta", "build_kg"]
+def write_kg(run_dir: Path | str) -> Path:
+    """Rebuild the graph from the ledger and persist ``run_dir/kg.json``.
+
+    Self-healing by construction: the previous file's content is irrelevant —
+    stale or corrupt state is fully replaced by the rebuild. Returns the path.
+    """
+    run_dir = Path(run_dir)
+    path = run_dir / KG_FILENAME
+    _write_json(path, {"version": KG_VERSION, **build_kg(run_dir)})
+    return path
+
+
+__all__ = ["param_diff", "score_delta", "build_kg", "write_kg", "KG_FILENAME", "KG_VERSION"]
