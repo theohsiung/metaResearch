@@ -165,11 +165,20 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
 def _resolve(
     name: str, before_iteration: int, rows: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """Resolve a lineage name to a prior bundle row (None when absent)."""
-    for row in rows:
-        if row["name"] == name and row["iteration"] < before_iteration:
-            return row
-    return None
+    """Resolve a lineage name to the **latest** prior bundle of that name.
+
+    Re-evaluated names are common; the proposer's reference means "the version
+    of <name> I could see when proposing" — i.e. the newest bundle strictly
+    before the child's iteration. None when no prior bundle matches.
+    """
+    candidates = [
+        row
+        for row in rows
+        if row["name"] == name and row["iteration"] < before_iteration
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda row: row["iteration"])
 
 
 __all__ = ["param_diff", "score_delta", "build_kg"]

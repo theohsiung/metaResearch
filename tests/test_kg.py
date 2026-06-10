@@ -223,6 +223,28 @@ def test_mutated_from_edge_carries_param_diff_and_score_delta(
     ]
 
 
+def test_parent_resolves_to_latest_prior_evaluation(tmp_path: Path) -> None:
+    # The same candidate name re-evaluated across iterations: a child naming it
+    # links to the newest bundle *before* the child — never a later re-eval,
+    # never a stale earlier one.
+    base = {"fin_type": "pin", "arrangement": "inline"}
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(tmp_path, 0, "pin_fins", params=base, scores=scores)
+    _record_bundle(
+        tmp_path, 1, "early_child", params=base, scores=scores, parent="pin_fins"
+    )
+    _record_bundle(tmp_path, 2, "pin_fins", params=base, scores=scores)
+    _record_bundle(
+        tmp_path, 3, "late_child", params=base, scores=scores, parent="pin_fins"
+    )
+
+    graph = build_kg(tmp_path)
+
+    src_by_child = {e["dst"]: e["src"] for e in graph["edges"]}
+    assert src_by_child["001_early_child"] == "000_pin_fins"
+    assert src_by_child["003_late_child"] == "002_pin_fins"
+
+
 def test_baselines_without_parent_have_no_mutated_from_edge(tmp_path: Path) -> None:
     _record_bundle(
         tmp_path,
