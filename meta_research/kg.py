@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from meta_research.experience import (
+    DESIGN_SPEC_FILENAME,
     EXPERIENCE_DIRNAME,
     HYPOTHESIS_FILENAME,
     RESULT_FILENAME,
@@ -92,6 +93,44 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
     if not experience_dir.is_dir():
         return {"nodes": nodes, "edges": edges, "warnings": warnings}
 
+    rows = _parse_bundles(experience_dir, warnings)
+
+    for row in rows:
+        nodes.append(
+            {
+                "id": row["id"],
+                "iteration": row["iteration"],
+                "name": row["name"],
+                "status": row["status"],
+                "scores": row["scores"],
+                "bundle": f"{EXPERIENCE_DIRNAME}/{row['id']}",
+            }
+        )
+        parent_name = row["parent"]
+        if parent_name:
+            parent = _resolve(parent_name, row["iteration"], rows)
+            if parent is not None:
+                edges.append(
+                    {
+                        "kind": "mutated-from",
+                        "src": parent["id"],
+                        "dst": row["id"],
+                        "axis": row["axis"],
+                        "param_diff": param_diff(parent["params"], row["params"]),
+                        "score_delta": score_delta(row["scores"], parent["scores"]),
+                    }
+                )
+
+    return {"nodes": nodes, "edges": edges, "warnings": warnings}
+
+
+def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, Any]]:
+    """First pass: parse every bundle into a flat row (facts only).
+
+    Malformed bundles append to ``warnings`` and are skipped — the KG mirrors
+    :meth:`Experience.history`'s tolerance, never raising on ledger content.
+    """
+    rows: list[dict[str, Any]] = []
     for entry in sorted(experience_dir.iterdir()):
         if not entry.is_dir():
             continue
@@ -102,8 +141,9 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
         if result_doc is None:
             warnings.append(f"{entry.name}: missing/invalid {RESULT_FILENAME}; skipped")
             continue
+        spec_doc = _read_json(entry / DESIGN_SPEC_FILENAME) or {}
         front, _prose = _read_hypothesis(entry / HYPOTHESIS_FILENAME)
-        nodes.append(
+        rows.append(
             {
                 "id": entry.name,
                 "iteration": int(match.group("iter")),
@@ -114,11 +154,22 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
                     for k, v in (result_doc.get("scores") or {}).items()
                     if isinstance(v, (int, float))
                 },
-                "bundle": f"{EXPERIENCE_DIRNAME}/{entry.name}",
+                "params": dict(spec_doc.get("params") or {}),
+                "parent": str(front.get("parent") or "").strip(),
+                "axis": str(front.get("axis") or ""),
             }
         )
+    return rows
 
-    return {"nodes": nodes, "edges": edges, "warnings": warnings}
+
+def _resolve(
+    name: str, before_iteration: int, rows: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Resolve a lineage name to a prior bundle row (None when absent)."""
+    for row in rows:
+        if row["name"] == name and row["iteration"] < before_iteration:
+            return row
+    return None
 
 
 __all__ = ["param_diff", "score_delta", "build_kg"]

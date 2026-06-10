@@ -175,3 +175,64 @@ def test_build_kg_yields_one_node_per_bundle_including_failures(
 
 def test_build_kg_empty_run_dir_is_empty_graph(tmp_path: Path) -> None:
     assert build_kg(tmp_path) == {"nodes": [], "edges": [], "warnings": []}
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — mutated-from edges (facts only; design.md §3)
+# --------------------------------------------------------------------------- #
+def test_mutated_from_edge_carries_param_diff_and_score_delta(
+    tmp_path: Path,
+) -> None:
+    _record_bundle(
+        tmp_path,
+        0,
+        "pin_fins",
+        params={"fin_type": "pin", "arrangement": "inline", "pitch_mm": 4.0},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 590.0},
+        status="frontier",
+    )
+    _record_bundle(
+        tmp_path,
+        1,
+        "staggered_pin_v1",
+        params={"fin_type": "pin", "arrangement": "staggered", "pitch_mm": 4.0},
+        scores={"thermal_resistance": 0.042, "pressure_drop": 820.0},
+        status="frontier",
+        parent="pin_fins",
+        axis="flow_arrangement",
+    )
+
+    graph = build_kg(tmp_path)
+
+    assert graph["edges"] == [
+        {
+            "kind": "mutated-from",
+            "src": "000_pin_fins",
+            "dst": "001_staggered_pin_v1",
+            "axis": "flow_arrangement",
+            "param_diff": {
+                "changed": {"arrangement": ["inline", "staggered"]},
+                "added": {},
+                "removed": {},
+            },
+            "score_delta": {
+                "thermal_resistance": pytest.approx(0.042 - 0.061),
+                "pressure_drop": pytest.approx(230.0),
+            },
+        }
+    ]
+
+
+def test_baselines_without_parent_have_no_mutated_from_edge(tmp_path: Path) -> None:
+    _record_bundle(
+        tmp_path,
+        0,
+        "straight_fins",
+        params={"fin_type": "straight"},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 410.0},
+        status="frontier",
+        parent="",
+    )
+    graph = build_kg(tmp_path)
+    assert graph["edges"] == []
+    assert graph["warnings"] == []
