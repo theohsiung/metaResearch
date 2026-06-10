@@ -335,7 +335,7 @@ def cmd_progress(args: argparse.Namespace) -> int:
 #: Generated/scratch paths never copied when scaffolding `--from <example>`.
 _EXAMPLE_IGNORE = shutil.ignore_patterns(
     "__pycache__", "*.pyc", ".git", "experience", "runs",
-    "results.tsv", "frontier.json", "*.png", "*.npz",
+    "results.tsv", "frontier.json", "kg.json", "*.png", "*.npz",
 )
 _GITIGNORE_STUB = "__pycache__/\n*.pyc\n.venv/\n"
 
