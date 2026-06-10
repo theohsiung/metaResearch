@@ -225,3 +225,48 @@ def test_seed_baselines_writes_ledger_without_commit(experiment_run_dir) -> None
     assert (run_dir / "experience").is_dir()
     assert (run_dir / "results.tsv").is_file()
     assert (run_dir / "frontier.json").is_file()
+
+
+# --------------------------------------------------------------------------- #
+# kg.json — rebuilt on every recorded evaluation (DESIGN §7.6)
+# --------------------------------------------------------------------------- #
+def test_evaluate_rebuilds_kg_alongside_frontier(experiment_run_dir) -> None:
+    experiment, run_dir = experiment_run_dir
+    seed_baselines(experiment, run_dir, commit=False)
+
+    kg_path = run_dir / "kg.json"
+    assert kg_path.is_file(), "seeding must already derive the knowledge graph"
+
+    # Evaluate a fresh candidate that names a baseline as its parent.
+    designs_dir = run_dir / str(experiment.DESIGNS_DIR)
+    baseline_name = experiment.BASELINES[0]
+    shutil.copyfile(
+        designs_dir / f"{baseline_name}.py", designs_dir / "kg_candidate.py"
+    )
+    evaluate_and_record(
+        "kg_candidate",
+        experiment,
+        run_dir,
+        hypothesis={
+            "axis": "geometry",
+            "parent": baseline_name,
+            "expected": "same scores (verbatim copy)",
+            "reasoning": "kg integration test",
+        },
+        commit=True,
+        tag="kg-test",
+    )
+
+    doc = json.loads(kg_path.read_text(encoding="utf-8"))
+    assert doc["version"] == 1
+    assert any("kg_candidate" in node["id"] for node in doc["nodes"])
+    edge = next(
+        e
+        for e in doc["edges"]
+        if e["kind"] == "mutated-from" and "kg_candidate" in e["dst"]
+    )
+    assert baseline_name in edge["src"]
+
+    # The rebuilt kg.json rides in the same append-only commit.
+    assert _git(run_dir, "ls-files", "kg.json").stdout.strip() == "kg.json"
+    assert "kg.json" not in _git(run_dir, "status", "--porcelain").stdout
