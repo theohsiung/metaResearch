@@ -109,7 +109,11 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
         parent_name = row["parent"]
         if parent_name:
             parent = _resolve(parent_name, row["iteration"], rows)
-            if parent is not None:
+            if parent is None:
+                warnings.append(
+                    f"{row['id']}: parent {parent_name!r} not found in prior bundles"
+                )
+            else:
                 edges.append(
                     {
                         "kind": "mutated-from",
@@ -122,12 +126,16 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
                 )
         for inspiration_name in row["inspired_by"]:
             inspiration = _resolve(inspiration_name, row["iteration"], rows)
-            if inspiration is not None:
-                # Pure lineage pointer: no diff/delta/axis — cross-design diff
-                # semantics are undefined (locked decision Q4).
-                edges.append(
-                    {"kind": "inspired-by", "src": inspiration["id"], "dst": row["id"]}
+            if inspiration is None:
+                warnings.append(
+                    f"{row['id']}: inspired_by {inspiration_name!r} not found in prior bundles"
                 )
+                continue
+            # Pure lineage pointer: no diff/delta/axis — cross-design diff
+            # semantics are undefined (locked decision Q4).
+            edges.append(
+                {"kind": "inspired-by", "src": inspiration["id"], "dst": row["id"]}
+            )
 
     return {"nodes": nodes, "edges": edges, "warnings": warnings}
 

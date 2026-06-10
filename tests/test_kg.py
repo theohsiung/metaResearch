@@ -286,3 +286,30 @@ def test_inspired_by_yields_pure_lineage_pointers(tmp_path: Path) -> None:
     ]
     # The primary mutated-from edge coexists with the inspiration pointers.
     assert [e["kind"] for e in graph["edges"]].count("mutated-from") == 1
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — unresolvable lineage: loud warnings, never fatal, never silent
+# --------------------------------------------------------------------------- #
+def test_unresolvable_lineage_names_surface_as_warnings(tmp_path: Path) -> None:
+    scores = {"thermal_resistance": 0.06, "pressure_drop": 500.0}
+    _record_bundle(
+        tmp_path,
+        0,
+        "typo_child",
+        params={"fin_type": "pin"},
+        scores=scores,
+        parent="strait_fins",  # typo: matches no bundle
+        inspired_by=["ghost_design"],
+    )
+
+    graph = build_kg(tmp_path)
+
+    # The node is still produced; nothing is dropped silently.
+    assert [n["id"] for n in graph["nodes"]] == ["000_typo_child"]
+    assert graph["edges"] == []
+    assert len(graph["warnings"]) == 2
+    parent_warning = next(w for w in graph["warnings"] if "strait_fins" in w)
+    assert "000_typo_child" in parent_warning
+    ghost_warning = next(w for w in graph["warnings"] if "ghost_design" in w)
+    assert "000_typo_child" in ghost_warning
