@@ -558,13 +558,15 @@ def _render_hypothesis_md(
     """Render ``hypothesis.md`` (front-matter per 7.2 + prose reasoning).
 
     Front-matter keys, in fixed order: ``name``, ``iteration``, ``axis``,
-    ``parent``, ``change``, ``expected``, ``status``. The prose body is the
-    agent's ``reasoning`` (which prior heatmaps/results were inspected and what
-    failure mode this design targets).
+    ``parent``, ``change`` (the one-line "what was changed"), ``inspired_by``
+    (comma-separated names; multi-parent lineage, 7.3), ``expected``,
+    ``status``. The prose body is the agent's ``reasoning`` (which prior
+    heatmaps/results were inspected and what failure mode this design targets).
     """
     axis = _scalar(hypothesis.get("axis"))
     parent = _scalar(hypothesis.get("parent"))
     change = _scalar(hypothesis.get("change"))
+    inspired_by = _inspired_by_scalar(hypothesis.get("inspired_by"))
     expected = _scalar(hypothesis.get("expected"))
     reasoning = str(hypothesis.get("reasoning") or "").strip()
 
@@ -575,6 +577,7 @@ def _render_hypothesis_md(
         f"axis: {_yaml_scalar(axis)}",
         f"parent: {_yaml_scalar(parent)}",
         f"change: {_yaml_scalar(change)}",
+        f"inspired_by: {_yaml_scalar(inspired_by)}",
         f"expected: {_yaml_scalar(expected)}",
         f"status: {_yaml_scalar(status)}",
         "---",
@@ -587,6 +590,19 @@ def _render_hypothesis_md(
 
 def _scalar(value: Any) -> str:
     return "" if value is None else str(value)
+
+
+def _inspired_by_scalar(value: Any) -> str:
+    """Render the optional multi-parent list (7.3) as a comma-separated scalar.
+
+    Accepts a list/tuple of names or a pre-joined string; empty/absent -> ``""``
+    so the front-matter line is always present and the schema stays line-parsable.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v).strip() for v in value if str(v).strip())
+    return str(value).strip()
 
 
 def _yaml_scalar(value: str) -> str:

@@ -286,6 +286,48 @@ def test_record_hypothesis_front_matter_carries_change(
     assert "change: inline -> staggered pin rows" in text
 
 
+def test_record_persists_inspired_by_in_front_matter(
+    git_repo: Path, design_src: Path
+) -> None:
+    # The proposer may credit several prior candidates (multi-parent lineage,
+    # DESIGN §7.3): the hand-off list must survive into the bundle so the
+    # knowledge graph can be rebuilt from bundles alone.
+    exp = Experience(git_repo, OBJECTIVES)
+    hypothesis = dict(_hypothesis(), inspired_by=["pin_fins", "straight_fins"])
+    bundle = Path(
+        exp.record(
+            iteration=6,
+            name="staggered_pin_v3",
+            design_src_path=design_src,
+            design=DesignSpec(params={"fin_type": "pin"}),
+            result=_make_result(),
+            hypothesis=hypothesis,
+        )
+    )
+    text = (bundle / "hypothesis.md").read_text(encoding="utf-8")
+    front_matter = text.split("---")[1]
+    assert "inspired_by: pin_fins, straight_fins" in front_matter
+
+
+def test_record_without_inspired_by_round_trips_empty(
+    git_repo: Path, design_src: Path
+) -> None:
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = Path(
+        exp.record(
+            iteration=7,
+            name="straight_fins",
+            design_src_path=design_src,
+            design=DesignSpec(params={"fin_type": "straight"}),
+            result=_make_result(),
+            hypothesis=_hypothesis(),
+        )
+    )
+    text = (bundle / "hypothesis.md").read_text(encoding="utf-8")
+    front_matter = text.split("---")[1]
+    assert 'inspired_by: ""' in front_matter
+
+
 # --------------------------------------------------------------------------- #
 # bundle_dir / next_iteration
 # --------------------------------------------------------------------------- #
