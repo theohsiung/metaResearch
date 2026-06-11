@@ -249,13 +249,40 @@ class Experience:
 
     # -- git helpers (append-only) ------------------------------------------
 
+    def _verify_repo_root(self) -> None:
+        """Refuse git mutations unless ``run_dir`` is its own repository root.
+
+        ``git add -A`` stages the *whole* working tree (git >= 2.0) and
+        ``git checkout -b`` switches the branch of the *whole* checkout. If
+        ``run_dir`` were nested inside a larger host repository, a commit here
+        would sweep in unrelated host files and branch-switch the host checkout.
+        ``meta-research init`` gives each experiment its own repo; this guard
+        enforces that precondition.
+        """
+        completed = self._git("rev-parse", "--show-toplevel")
+        toplevel = completed.stdout.strip()
+        if completed.returncode != 0 or not toplevel:
+            raise RuntimeError(
+                f"refusing git operation: {self.run_dir} is not inside a git repository; "
+                "scaffold with `meta-research init` or `git init` the run dir first"
+            )
+        if Path(toplevel).resolve() != self.run_dir.resolve():
+            raise RuntimeError(
+                f"refusing git operation: run_dir {self.run_dir} is not the repository root "
+                f"(the repository root is {toplevel}); committing from here would stage "
+                "unrelated host files and switch the host branch — give the run dir its "
+                "own repository (`meta-research init` does this)"
+            )
+
     def ensure_branch(self, tag: str) -> str:
         """Ensure the run is on branch ``meta-research/<tag>``; never resets.
 
         Creates the branch with ``git checkout -b`` if absent, otherwise just
         checks it out. Returns the full branch name. Working-tree state is never
-        discarded (no reset / no ``--force``).
+        discarded (no reset / no ``--force``). Refuses to run unless ``run_dir``
+        is its own repository root (see :meth:`_verify_repo_root`).
         """
+        self._verify_repo_root()
         branch = _branch_name(tag)
         existing = self._git("branch", "--list", branch).stdout.strip()
         if existing:
@@ -267,14 +294,18 @@ class Experience:
     def commit(self, message: str) -> str:
         """Stage everything and commit. Append-only -- no reset, ever.
 
-        Runs ``git add -A`` then ``git commit -m <message>``. If there is
+        Runs ``git add -A -- .`` then ``git commit -m <message>``. If there is
         nothing to commit, that is logged and the existing HEAD is returned
         rather than raising (re-recording an identical bundle is benign).
+        Refuses to run unless ``run_dir`` is its own repository root (see
+        :meth:`_verify_repo_root`); the ``.`` pathspec is defence in depth
+        against staging anything outside ``run_dir``.
 
         Returns the resulting (or unchanged) HEAD short SHA, or ``""`` if it
         could not be resolved.
         """
-        self._git("add", "-A", check=True)
+        self._verify_repo_root()
+        self._git("add", "-A", "--", ".", check=True)
         completed = self._git("commit", "-m", message)
         if completed.returncode != 0:
             out = (completed.stdout + completed.stderr).lower()
@@ -285,6 +316,29 @@ class Experience:
                     "git commit failed (rc=%s): %s", completed.returncode, completed.stderr.strip()
                 )
         return self._head_sha()
+
+    def annotate_commit(self, bundle: Path | str, sha: str) -> None:
+        """Write the ledger commit SHA into the bundle's ``result.json``.
+
+        The SHA is the join key between a bundle and the full-run snapshot that
+        contains it (autoresearch records the same key in its results.tsv). The
+        annotation lands *after* the commit, so the git-tracked copy of
+        ``result.json`` lags one commit behind the filesystem copy — the SHA
+        names the commit that contains this bundle, which cannot contain
+        itself. Best-effort: failures are logged, never raised.
+        """
+        if not sha:
+            return
+        path = Path(bundle) / RESULT_FILENAME
+        doc = _read_json(path)
+        if doc is None:
+            logger.warning("cannot annotate commit sha: %s missing or invalid", path)
+            return
+        annotated = {**doc, "commit": sha}
+        try:
+            _write_json(path, annotated)
+        except (OSError, TypeError, ValueError):
+            logger.warning("failed to annotate commit sha into %s", path)
 
     def git_log_oneline(self) -> str:
         """Return ``git log --oneline`` (empty string on any failure)."""

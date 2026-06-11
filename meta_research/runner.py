@@ -305,6 +305,8 @@ def _finalize(
     log.append(iteration, name, status, result, hyp_summary)
 
     # 7. Append-only git commit (optional). Branch only if a tag was supplied.
+    #    The returned SHA is the bundle's join key to the full-run snapshot; it is
+    #    annotated into the bundle's result.json and the returned metadata.
     if commit:
         try:
             if tag:
@@ -312,7 +314,10 @@ def _finalize(
             message = _commit_message(
                 name, iteration, result, status, objectives, hyp_summary
             )
-            experience.commit(message)
+            sha = experience.commit(message)
+            if sha:
+                experience.annotate_commit(bundle, sha)
+                result = _attach_metadata(result, {"commit": sha})
         except Exception as exc:  # noqa: BLE001 — a commit failure must not lose the result
             result = _attach_metadata(result, {"commit_error": repr(exc)})
 
