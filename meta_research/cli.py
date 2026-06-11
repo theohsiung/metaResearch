@@ -549,8 +549,9 @@ in-session. There is no Python orchestrator.
 - `meta-research seed` to evaluate baselines, then loop:
   write a design -> `meta-research eval <name> --hypothesis hyp.json --commit`
   -> read `result.json` + `heatmap.png` -> repeat.
-- git is **append-only**: never reset history. The ledger is `results.tsv`,
-  `frontier.json`, and `experience/`.
+- The ledger is `results.tsv`, `frontier.json`, and `experience/` — read those
+  directly. git is the **append-only** audit trail: never reset history; this
+  run dir must stay its own git repository.
 - **NEVER STOP** until interrupted; never declare the frontier optimal.
 '''
 

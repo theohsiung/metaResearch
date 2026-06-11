@@ -49,9 +49,12 @@ plate. This is **not** ML training. The thing being scored is produced by a plug
 - **Configuration-as-code, no YAML.** Objectives, budget, operating point, baselines, and
   evaluator selection live as plain Python in a fixed, read-only `prepare.py`.
 
-- **git is an append-only experience ledger.** Every evaluated candidate — kept, dominated,
-  infeasible, or crashed — is committed. **Never `git reset` to discard.** Discarding would
-  delete exactly the diagnostic traces the methodology depends on.
+- **The filesystem is the experience store; git is its append-only audit trail.** Every
+  evaluated candidate — kept, dominated, infeasible, or crashed — keeps its full bundle under
+  `experience/` forever, and every evaluation is committed for tamper-evidence and backup.
+  **Never `git reset` to discard.** Discarding would delete exactly the diagnostic traces the
+  methodology depends on. (The run dir must be its own git repo — `meta-research init` sets
+  this up; the runner refuses to commit from a run dir nested inside another repository.)
 
 - **Pareto frontier replaces keep/discard.** autoresearch's binary keep/discard is replaced by
   Pareto-frontier membership. A non-dominated candidate enters `frontier.json`; a dominated one
@@ -85,7 +88,7 @@ meta-research seed --commit
 # 4. Tell the agent to follow the program:
 #    > follow program.md
 #    It loads the meta-research skill and runs the loop itself: inspect experience
-#    (frontier, results.tsv, git log, and the actual heatmap.png images) → form one
+#    (frontier, results.tsv, and the actual heatmap.png images) → form one
 #    falsifiable mechanism-level hypothesis → write designs/<name>.py → eval --commit →
 #    read the new heatmap → repeat. It never stops until interrupted, and never resets git.
 ```

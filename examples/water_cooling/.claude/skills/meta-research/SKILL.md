@@ -1,6 +1,6 @@
 ---
 name: meta-research
-description: Autonomous, hypothesis-driven research loop for engineering/scientific design — it proposes parametric designs, scores each with a pluggable objective (an in-process numerical model, a loaded surrogate model, or a real-simulation API), reads the diagnostics (e.g. heatmaps) back, and maintains a multi-objective Pareto frontier in git as an append-only experience ledger. Use this whenever the user wants to autonomously search or optimize a design or a set of parameters against a simulator/objective/surrogate — especially multi-objective trade-offs, "keep iterating overnight", or mechanism-level (not just parameter-tweak) design improvement — when they ask to "run meta-research", or when the working repo contains a prepare.py + designs/ experiment. This is design/parameter search, not ML model training.
+description: Autonomous, hypothesis-driven research loop for engineering/scientific design — it proposes parametric designs, scores each with a pluggable objective (an in-process numerical model, a loaded surrogate model, or a real-simulation API), reads the diagnostics (e.g. heatmaps) back, and maintains a multi-objective Pareto frontier over an append-only experience ledger (filesystem bundles, mirrored to git as the audit trail). Use this whenever the user wants to autonomously search or optimize a design or a set of parameters against a simulator/objective/surrogate — especially multi-objective trade-offs, "keep iterating overnight", or mechanism-level (not just parameter-tweak) design improvement — when they ask to "run meta-research", or when the working repo contains a prepare.py + designs/ experiment. This is design/parameter search, not ML model training.
 ---
 
 # meta-research
@@ -31,12 +31,14 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 ## The loop (checklist — repeat every iteration)
 
 1. **Inspect experience** (never skip): run `meta-research frontier`, read
-   `results.tsv`, run `git log --oneline`, and `meta-research progress` to refresh the
-   best-so-far curves + Pareto plot. Then **`Read` the actual `heatmap.png`**
-   (or whatever diagnostic the evaluator emits) AND the `hypothesis.md` of the
-   frontier members, the most recent candidates, and the failures. Use
-   `git show <sha>:experience/<dir>/design.py` to read prior source. The diagnostic
-   image tells you *where* the design is failing — that is how the loop closes.
+   `results.tsv` (the authoritative timeline), and run `meta-research progress` to
+   refresh the best-so-far curves + Pareto plot. Then **`Read` the actual
+   `heatmap.png`** (or whatever diagnostic the evaluator emits) AND the
+   `hypothesis.md` of the frontier members, the most recent candidates, and the
+   failures. Read `experience/<dir>/design.py` directly for any prior source —
+   bundles are append-only files on disk, never rewritten (git is the audit/backup
+   layer, not your query interface). The diagnostic image tells you *where* the
+   design is failing — that is how the loop closes.
 2. **Form ONE falsifiable hypothesis** targeting a **mechanism**, not a parameter
    value (see REFERENCE.md mechanism axes). Name the failure mode the diagnostic
    revealed and the single mechanism you will change to fix it.
