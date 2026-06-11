@@ -47,6 +47,7 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    `build()`, sanity-check params fit the envelope / pass obvious feasibility before
    spending an evaluation.
 4. **Evaluate + commit**: write `hyp.json` (schema in REFERENCE.md: axis, parent,
+   change — the one-line "what was changed", it becomes the commit/TSV summary —
    expected, reasoning), then
    `meta-research eval <name> --hypothesis hyp.json --commit`.
 5. **Read the result**: open the new `result.json` and the new `heatmap.png`. Did it

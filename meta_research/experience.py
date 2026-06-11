@@ -160,8 +160,9 @@ class Experience:
             design: The built :class:`DesignSpec`.
             result: The :class:`EvalResult` from the evaluator.
             hypothesis: The agent's reasoning dict (schema 7.3): keys ``axis``,
-                ``parent``, ``expected``, ``reasoning`` (and an optional
-                ``status`` folded in by the runner).
+                ``parent``, ``change`` (the one-line "what was changed"),
+                ``expected``, ``reasoning`` (and an optional ``status`` folded
+                in by the runner).
 
         Returns:
             The bundle directory :class:`~pathlib.Path`.
@@ -557,12 +558,13 @@ def _render_hypothesis_md(
     """Render ``hypothesis.md`` (front-matter per 7.2 + prose reasoning).
 
     Front-matter keys, in fixed order: ``name``, ``iteration``, ``axis``,
-    ``parent``, ``expected``, ``status``. The prose body is the agent's
-    ``reasoning`` (which prior heatmaps/results were inspected and what failure
-    mode this design targets).
+    ``parent``, ``change``, ``expected``, ``status``. The prose body is the
+    agent's ``reasoning`` (which prior heatmaps/results were inspected and what
+    failure mode this design targets).
     """
     axis = _scalar(hypothesis.get("axis"))
     parent = _scalar(hypothesis.get("parent"))
+    change = _scalar(hypothesis.get("change"))
     expected = _scalar(hypothesis.get("expected"))
     reasoning = str(hypothesis.get("reasoning") or "").strip()
 
@@ -572,6 +574,7 @@ def _render_hypothesis_md(
         f"iteration: {int(iteration)}",
         f"axis: {_yaml_scalar(axis)}",
         f"parent: {_yaml_scalar(parent)}",
+        f"change: {_yaml_scalar(change)}",
         f"expected: {_yaml_scalar(expected)}",
         f"status: {_yaml_scalar(status)}",
         "---",

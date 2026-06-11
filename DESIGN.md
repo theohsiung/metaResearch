@@ -220,6 +220,9 @@ performs the actual scoring.
     (auxiliary; bundles on disk are the primary read path).
 - Commit message format:
   `iter<NN> <name>: <obj1>=<v1> <obj2>=<v2> [<status>] — <one-line summary>`.
+  The summary is the hypothesis `change` line (WHAT was changed — scores + status
+  already say what happened); `expected` → `reasoning` → `summary` are fallbacks.
+  The same line is the `results.tsv` description column.
 
 ### 6.4 `runner.py` — the deterministic step the agent calls
 This replaces any outer-loop orchestrator. The **agent** decides *what* to try (per the
@@ -279,6 +282,7 @@ name: staggered_pin_v3
 iteration: 12
 axis: flow_arrangement          # mechanism axis (see SKILL.md)
 parent: pin_fins                # what it builds on (free-form, NOT a selection rule)
+change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -293,6 +297,7 @@ design module `designs/<name>.py`, then calls `meta-research eval <name>
 {
   "axis": "flow_arrangement",
   "parent": "pin_fins",
+  "change": "inline -> staggered pin rows over the outlet half",
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9's heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }

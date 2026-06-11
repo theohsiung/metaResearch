@@ -266,6 +266,26 @@ def test_record_hypothesis_front_matter(git_repo: Path, design_src: Path) -> Non
     assert "baseline" in text
 
 
+def test_record_hypothesis_front_matter_carries_change(
+    git_repo: Path, design_src: Path
+) -> None:
+    """The 'what was changed' line is preserved in the bundle, not just the log."""
+    hyp = {**_hypothesis(), "change": "inline -> staggered pin rows"}
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = Path(
+        exp.record(
+            iteration=6,
+            name="staggered_pins",
+            design_src_path=design_src,
+            design=DesignSpec(params={"fin_type": "pin"}),
+            result=_make_result(),
+            hypothesis=hyp,
+        )
+    )
+    text = (bundle / "hypothesis.md").read_text(encoding="utf-8")
+    assert "change: inline -> staggered pin rows" in text
+
+
 # --------------------------------------------------------------------------- #
 # bundle_dir / next_iteration
 # --------------------------------------------------------------------------- #

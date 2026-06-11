@@ -109,6 +109,7 @@ name: staggered_pin_v3
 iteration: 12
 axis: arrangement              # one of the mechanism axes in §1
 parent: pin_fins               # what it builds on (free-form, NOT a selection rule)
+change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -123,12 +124,16 @@ You write the design module, then pass this JSON; the runner folds it into
 {
   "axis": "arrangement",
   "parent": "pin_fins",
+  "change": "inline -> staggered pin rows over the outlet half",
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9 heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
 ```
 `--hypothesis` is optional to the CLI but **required by this skill**: it is the reasoning
-trace Meta-Harness depends on. Make it specific and falsifiable.
+trace Meta-Harness depends on. Make it specific and falsifiable. `change` is the
+one-line "what was changed vs the parent" — it becomes the commit subject's summary
+and the `results.tsv` description (`expected` is the fallback when absent), so keep
+it concrete: name the mechanism before and after, not the hoped-for effect.
 
 ---
 
