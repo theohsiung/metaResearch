@@ -204,14 +204,25 @@ performs the actual scoring.
   into rows `{"iteration","name","status","scores","metadata","hypothesis","axis","parent"}`.
 - `next_iteration() -> int` — highest existing bundle iteration + 1 (the agent does not
   track iteration counters by hand).
-- git helpers (subprocess, cwd=run_dir):
+- git helpers (subprocess, cwd=run_dir). git is the **audit/backup layer**; the agent's
+  query surface is the filesystem (bundles + `results.tsv`). Both mutating helpers
+  first verify that `run_dir` is its own repository root (`git rev-parse
+  --show-toplevel` == run_dir) and refuse otherwise — `add -A` / `checkout -b` in a
+  nested run_dir would stage host files and switch the host checkout's branch:
   - `ensure_branch(tag: str)` — `git checkout -b meta-research/<tag>` if not present,
     else checkout. Never resets.
-  - `commit(message: str)` — `git add -A && git commit -m ...`. **Append-only. No reset, ever.**
-  - `git_log_oneline() -> str`, `git_show(ref: str) -> str` — thin read wrappers (the
-    agent uses these via Bash to inspect any prior candidate).
+  - `commit(message: str)` — `git add -A -- . && git commit -m ...`. **Append-only. No
+    reset, ever.** Returns the short HEAD SHA.
+  - `annotate_commit(bundle, sha)` — writes `"commit": "<short-sha>"` into the bundle's
+    `result.json` after the commit (join key to the full-run snapshot; the git-tracked
+    copy lags one commit, since a commit cannot contain its own SHA).
+  - `git_log_oneline() -> str`, `git_show(ref: str) -> str` — thin read wrappers
+    (auxiliary; bundles on disk are the primary read path).
 - Commit message format:
   `iter<NN> <name>: <obj1>=<v1> <obj2>=<v2> [<status>] — <one-line summary>`.
+  The summary is the hypothesis `change` line (WHAT was changed — scores + status
+  already say what happened); `expected` → `reasoning` → `summary` are fallbacks.
+  The same line is the `results.tsv` description column.
 
 ### 6.4 `runner.py` — the deterministic step the agent calls
 This replaces any outer-loop orchestrator. The **agent** decides *what* to try (per the
@@ -271,6 +282,7 @@ name: staggered_pin_v3
 iteration: 12
 axis: flow_arrangement          # mechanism axis (see SKILL.md)
 parent: pin_fins                # what it builds on (free-form, NOT a selection rule)
+change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -285,6 +297,7 @@ design module `designs/<name>.py`, then calls `meta-research eval <name>
 {
   "axis": "flow_arrangement",
   "parent": "pin_fins",
+  "change": "inline -> staggered pin rows over the outlet half",
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9's heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
@@ -442,9 +455,11 @@ against a simulator/objective, "run meta-research", a repo containing `prepare.p
 - **Quick start:** read `program.md` and `prepare.py`; run `meta-research seed` to
   evaluate baselines; then loop.
 - **The loop (checklist):**
-  1. Inspect experience: `meta-research frontier`, `results.tsv`, `git log --oneline`,
-     and **`Read` the actual `heatmap.png`** + `hypothesis.md` of frontier / recent /
-     failed candidates (`git show <sha>:...` for full prior code).
+  1. Inspect experience: `meta-research frontier`, `results.tsv` (the authoritative
+     timeline), and **`Read` the actual `heatmap.png`** + `hypothesis.md` of frontier /
+     recent / failed candidates (read `experience/<dir>/design.py` directly for full
+     prior code — bundles are never rewritten; git is the audit layer, not the query
+     interface).
   2. Form ONE falsifiable hypothesis targeting a **mechanism** (not a parameter tweak).
   3. Write `designs/<name>.py` (copy a frontier design, change one mechanism); dry-run
      `build()` + feasibility first (mandatory prototype).

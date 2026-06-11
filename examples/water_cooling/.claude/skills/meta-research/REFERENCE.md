@@ -109,6 +109,7 @@ name: staggered_pin_v3
 iteration: 12
 axis: arrangement              # one of the mechanism axes in §1
 parent: pin_fins               # what it builds on (free-form, NOT a selection rule)
+change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 expected: "R_th down, dP up"
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
@@ -123,25 +124,45 @@ You write the design module, then pass this JSON; the runner folds it into
 {
   "axis": "arrangement",
   "parent": "pin_fins",
+  "change": "inline -> staggered pin rows over the outlet half",
   "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
   "reasoning": "Iter 9 heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
 ```
 `--hypothesis` is optional to the CLI but **required by this skill**: it is the reasoning
-trace Meta-Harness depends on. Make it specific and falsifiable.
+trace Meta-Harness depends on. Make it specific and falsifiable. `change` is the
+one-line "what was changed vs the parent" — it becomes the commit subject's summary
+and the `results.tsv` description (`expected` is the fallback when absent), so keep
+it concrete: name the mechanism before and after, not the hoped-for effect.
 
 ---
 
-## 5. git append-only ledger + Pareto frontier
+## 5. Experience ledger (filesystem) + git audit trail + Pareto frontier
 
-- **git is the experience store, append-only.** Every candidate is committed, whatever
-  its status. **NEVER `git reset`, rebase-drop, or force-push** — that would delete the
-  exact diagnostic traces the method runs on. Discarding is replaced by *frontier
-  membership*, not deletion.
+- **The filesystem is the experience store.** Every candidate — frontier, dominated,
+  infeasible, or crashed — keeps its full bundle under `experience/` forever; bundles
+  are never rewritten. `results.tsv` is the authoritative flat timeline.
+- **git is the append-only audit/backup layer, not a query interface.** Every
+  evaluation is committed so the run is tamper-evident, recoverable, and (when
+  pushed) backed up off-site. **NEVER `git reset`, rebase-drop, or force-push** —
+  that would delete the exact diagnostic traces the method runs on. Discarding is
+  replaced by *frontier membership*, not deletion. (Contrast with autoresearch,
+  where git *is* the store and the search state — advance on keep, reset on
+  discard. Here bundles replaced the store role and the frontier replaced the
+  keep/discard role.)
+- **The run dir must be its own git repository** (`meta-research init` scaffolds
+  this). The runner refuses to commit when `run_dir` is not the repository root:
+  `git add -A` / `checkout -b` would otherwise stage host files and switch the
+  host checkout's branch.
 - **Run on a branch** `meta-research/<tag>` (the runner's `ensure_branch` handles this;
   it never resets). Agree the tag in `program.md` setup.
 - **Commit message format** (the runner emits this):
   `iter<NN> <name>: <obj1>=<v1> <obj2>=<v2> [<status>] — <one-line summary>`.
+- **Commit SHA as join key.** After each commit the runner annotates the bundle's
+  `result.json` with `"commit": "<short-sha>"` — the snapshot of the whole run at
+  that evaluation (`git show <sha>:frontier.json` replays the frontier as it stood
+  then). The git-tracked copy of `result.json` lags one commit behind the disk
+  copy, since a commit cannot contain its own SHA.
 - **Pareto frontier replaces keep/discard.** `a` dominates `b` iff `a` is no worse on
   every objective and strictly better on ≥1 (using each `Objective.direction`). A
   feasible non-dominated candidate enters `frontier.json`; a dominated one is still
@@ -149,8 +170,9 @@ trace Meta-Harness depends on. Make it specific and falsifiable.
 - **Status values** (in `results.tsv` and `result.json`): `frontier | dominated |
   infeasible | crash`.
 - **Inspect, don't trust memory.** `meta-research frontier` (Pareto set + best per
-  objective), `results.tsv` (flat ledger), `git log --oneline`, and
-  `git show <sha>:experience/<dir>/design.py` to read any prior source verbatim.
+  objective), `results.tsv` (flat timeline), and the bundles themselves —
+  `experience/<dir>/design.py`, `hypothesis.md`, `trace/heatmap.png` — read them
+  directly from disk; they are never rewritten.
 - `frontier.json` shape:
 ```json
 {

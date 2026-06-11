@@ -266,6 +266,26 @@ def test_record_hypothesis_front_matter(git_repo: Path, design_src: Path) -> Non
     assert "baseline" in text
 
 
+def test_record_hypothesis_front_matter_carries_change(
+    git_repo: Path, design_src: Path
+) -> None:
+    """The 'what was changed' line is preserved in the bundle, not just the log."""
+    hyp = {**_hypothesis(), "change": "inline -> staggered pin rows"}
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = Path(
+        exp.record(
+            iteration=6,
+            name="staggered_pins",
+            design_src_path=design_src,
+            design=DesignSpec(params={"fin_type": "pin"}),
+            result=_make_result(),
+            hypothesis=hyp,
+        )
+    )
+    text = (bundle / "hypothesis.md").read_text(encoding="utf-8")
+    assert "change: inline -> staggered pin rows" in text
+
+
 # --------------------------------------------------------------------------- #
 # bundle_dir / next_iteration
 # --------------------------------------------------------------------------- #
@@ -309,6 +329,128 @@ def test_commit_makes_a_commit(git_repo: Path, design_src: Path) -> None:
     assert int(after) == int(before) + 1
     log = _git(git_repo, "log", "--oneline").stdout
     assert "straight_fins" in log
+
+
+# --------------------------------------------------------------------------- #
+# repo-root guard: git mutations refuse to touch a host repository
+# --------------------------------------------------------------------------- #
+def test_commit_refuses_when_run_dir_is_not_repo_root(git_repo: Path) -> None:
+    """A run_dir nested inside a larger repo must not be committed from.
+
+    `git add -A` stages the *whole* host tree (git >= 2.0) and would sweep
+    unrelated work into the experiment ledger.
+    """
+    run_dir = git_repo / "runs" / "exp1"
+    run_dir.mkdir(parents=True)
+    stray = git_repo / "unrelated_wip.txt"
+    stray.write_text("host work in progress\n", encoding="utf-8")
+
+    exp = Experience(run_dir, OBJECTIVES)
+    before = _git(git_repo, "rev-list", "--count", "HEAD").stdout.strip()
+    with pytest.raises(RuntimeError, match="repository root"):
+        exp.commit("iter00 x: cost=1 [frontier] — must be refused")
+
+    after = _git(git_repo, "rev-list", "--count", "HEAD").stdout.strip()
+    assert after == before, "no commit may land in the host repository"
+    staged = _git(git_repo, "diff", "--cached", "--name-only").stdout
+    assert "unrelated_wip.txt" not in staged, "host files must never be staged"
+
+
+def test_ensure_branch_refuses_when_run_dir_is_not_repo_root(git_repo: Path) -> None:
+    """ensure_branch would otherwise branch-switch the host repository checkout."""
+    run_dir = git_repo / "runs" / "exp1"
+    run_dir.mkdir(parents=True)
+    exp = Experience(run_dir, OBJECTIVES)
+    branch_before = _git(git_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    with pytest.raises(RuntimeError, match="repository root"):
+        exp.ensure_branch("waterloop")
+    branch_after = _git(git_repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+    assert branch_after == branch_before, "host repository branch must not change"
+
+
+def test_commit_refuses_outside_any_repo(tmp_path: Path) -> None:
+    run_dir = tmp_path / "norepo"
+    run_dir.mkdir()
+    exp = Experience(run_dir, OBJECTIVES)
+    with pytest.raises(RuntimeError, match="not inside a git repository"):
+        exp.commit("iter00 x: cost=1 [frontier] — must be refused")
+
+
+def test_commit_allowed_when_run_dir_is_its_own_repo(git_repo: Path, design_src: Path) -> None:
+    """A run_dir with its own nested repo is fine: its root == run_dir."""
+    run_dir = git_repo / "runs" / "exp1"
+    run_dir.mkdir(parents=True)
+    _git(run_dir, "init")
+    _git(run_dir, "config", "user.email", "test@example.com")
+    _git(run_dir, "config", "user.name", "Test Runner")
+    _git(run_dir, "config", "commit.gpgsign", "false")
+
+    exp = Experience(run_dir, OBJECTIVES)
+    exp.record(
+        iteration=0,
+        name="straight_fins",
+        design_src_path=design_src,
+        design=DesignSpec(params={"fin_type": "straight"}),
+        result=_make_result(),
+        hypothesis=_hypothesis(),
+    )
+    outer_before = _git(git_repo, "rev-list", "--count", "HEAD").stdout.strip()
+    sha = exp.commit("iter00 straight_fins: thermal_resistance=0.061 [frontier] — nested repo")
+    assert sha, "commit in the run_dir's own repo must succeed and return a SHA"
+    outer_after = _git(git_repo, "rev-list", "--count", "HEAD").stdout.strip()
+    assert outer_after == outer_before, "the host repository must be untouched"
+
+
+# --------------------------------------------------------------------------- #
+# annotate_commit: best-effort SHA annotation into result.json
+# --------------------------------------------------------------------------- #
+def test_annotate_commit_writes_sha(git_repo: Path, design_src: Path) -> None:
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = exp.record(
+        iteration=0,
+        name="straight_fins",
+        design_src_path=design_src,
+        design=DesignSpec(params={"fin_type": "straight"}),
+        result=_make_result(),
+        hypothesis=_hypothesis(),
+    )
+    exp.annotate_commit(bundle, "abc1234")
+    doc = json.loads((Path(bundle) / "result.json").read_text(encoding="utf-8"))
+    assert doc["commit"] == "abc1234"
+    # The rest of the document is untouched.
+    assert doc["scores"] == _make_result().scores
+
+
+def test_annotate_commit_missing_result_json_never_raises(git_repo: Path) -> None:
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = git_repo / "experience" / "000_ghost"
+    bundle.mkdir(parents=True)
+    exp.annotate_commit(bundle, "abc1234")  # must log a warning, not raise
+    assert not (bundle / "result.json").exists()
+
+
+def test_annotate_commit_corrupt_result_json_never_raises(git_repo: Path) -> None:
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = git_repo / "experience" / "000_corrupt"
+    bundle.mkdir(parents=True)
+    (bundle / "result.json").write_text("{not json", encoding="utf-8")
+    exp.annotate_commit(bundle, "abc1234")  # must log a warning, not raise
+    assert (bundle / "result.json").read_text(encoding="utf-8") == "{not json"
+
+
+def test_annotate_commit_empty_sha_is_a_noop(git_repo: Path, design_src: Path) -> None:
+    exp = Experience(git_repo, OBJECTIVES)
+    bundle = exp.record(
+        iteration=0,
+        name="straight_fins",
+        design_src_path=design_src,
+        design=DesignSpec(params={"fin_type": "straight"}),
+        result=_make_result(),
+        hypothesis=_hypothesis(),
+    )
+    exp.annotate_commit(bundle, "")
+    doc = json.loads((Path(bundle) / "result.json").read_text(encoding="utf-8"))
+    assert "commit" not in doc
 
 
 # --------------------------------------------------------------------------- #

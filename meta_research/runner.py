@@ -113,10 +113,15 @@ def _status_for(result: EvalResult, label: str) -> str:
 
 
 def _hypothesis_summary(hypothesis: dict[str, Any] | None) -> str:
-    """Extract a one-line human summary from the hypothesis hand-off (DESIGN §7.3)."""
+    """Extract a one-line human summary from the hypothesis hand-off (DESIGN §7.3).
+
+    Prefers ``change`` (WHAT was changed — the scores + status on the same log
+    line already say what happened); ``expected``/``reasoning`` are fallbacks
+    for hyp.json files that predate the ``change`` field.
+    """
     if not hypothesis:
         return ""
-    for key in ("expected", "reasoning", "summary"):
+    for key in ("change", "expected", "reasoning", "summary"):
         value = hypothesis.get(key)
         if value:
             return str(value).strip().splitlines()[0]
@@ -305,6 +310,8 @@ def _finalize(
     log.append(iteration, name, status, result, hyp_summary)
 
     # 7. Append-only git commit (optional). Branch only if a tag was supplied.
+    #    The returned SHA is the bundle's join key to the full-run snapshot; it is
+    #    annotated into the bundle's result.json and the returned metadata.
     if commit:
         try:
             if tag:
@@ -312,7 +319,10 @@ def _finalize(
             message = _commit_message(
                 name, iteration, result, status, objectives, hyp_summary
             )
-            experience.commit(message)
+            sha = experience.commit(message)
+            if sha:
+                experience.annotate_commit(bundle, sha)
+                result = _attach_metadata(result, {"commit": sha})
         except Exception as exc:  # noqa: BLE001 — a commit failure must not lose the result
             result = _attach_metadata(result, {"commit_error": repr(exc)})
 
