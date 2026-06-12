@@ -100,7 +100,15 @@ experience/<iter:03d>_<name>/
     fields.npz         # optional raw arrays
     breakdown.json     # = result.metadata (per-mechanism breakdown)
     solver.log         # optional evaluator stdout
+    proposer_thinking.md  # auto-captured: your raw thinking for this iteration
 ```
+
+`trace/proposer_thinking.md` is harvested automatically from the session
+transcript at eval time (best-effort; includes the options you considered and
+rejected). You do NOT need to write it — but it does not replace
+`hypothesis.md`: keep authoring the curated reasoning there, it is what future
+iterations read first. Dig into a bundle's `proposer_thinking.md` when you need
+to know *why an alternative was rejected* at that iteration.
 
 ### `hypothesis.md` front-matter (you author the reasoning; the runner fills `status`)
 ```

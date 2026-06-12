@@ -271,9 +271,19 @@ trace/
   fields.npz         # optional raw arrays (evaluator-produced)
   breakdown.json     # = result.metadata (per-mechanism breakdown)
   solver.log         # optional evaluator stdout
+  proposer_thinking.md  # best-effort: raw thinking blocks harvested from the
+                        # session transcript at eval time (thinking.py)
 ```
-`hypothesis.md` IS the reasoning trace (authored by the agent, per fusion rule §1.1.6):
-it records what prior evidence / heatmaps were inspected and why this design follows.
+`hypothesis.md` IS the curated reasoning trace (authored by the agent, per fusion
+rule §1.1.6): it records what prior evidence / heatmaps were inspected and why this
+design follows. `trace/proposer_thinking.md` complements it with the *raw* thinking
+blocks (options considered and rejected, calculations) harvested automatically by
+`meta_research/thinking.py` between `record()` and the commit — session transcripts
+are not durable (compaction discards old blocks), so the ledger copy made at eval
+time is the only reliable one. Auto-discovered transcripts are harvested only when
+their last eval/seed marker references the current candidate (affinity guard), so a
+foreign session can never pollute the ledger; `META_RESEARCH_TRANSCRIPT` overrides
+discovery explicitly.
 
 ### 7.2 `hypothesis.md` front-matter
 ```

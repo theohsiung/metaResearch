@@ -33,6 +33,7 @@ from .experience import Experience
 from .frontier import classify, load_frontier, update_frontier
 from .interfaces import DesignSpec, EvalResult, Objective, replace
 from .logfmt import ResultsLog
+from .thinking import capture_thinking
 
 
 class Experiment(Protocol):
@@ -295,6 +296,15 @@ def _finalize(
         # instead of the evaluator's bare basename. This closes the loop: the agent
         # is told to re-Read the heatmap, so the path must be correct.
         result = _relocate_artifacts(result, bundle, run_dir)
+
+    # 4.5 Best-effort: harvest the proposer's thinking blocks for this iteration
+    #     from the session transcript into the bundle (Meta-Harness "store
+    #     everything" — transcripts are not durable, the ledger copy is). Runs
+    #     before the commit so the trace lands in the same commit as its bundle.
+    try:
+        capture_thinking(run_dir, bundle, name=name)
+    except Exception as exc:  # noqa: BLE001 — trace capture must never sink the step
+        result = _attach_metadata(result, {"thinking_error": repr(exc)})
 
     # 5. Recompute and persist the full Pareto frontier (now including this candidate).
     try:
