@@ -49,7 +49,9 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 4. **Evaluate + commit**: write `hyp.json` (schema in REFERENCE.md: axis, parent,
    change — the one-line "what was changed", it becomes the commit/TSV summary —
    expected, reasoning), then
-   `meta-research eval <name> --hypothesis hyp.json --commit`.
+   `meta-research eval <name> --hypothesis hyp.json --commit`. Your raw thinking
+   for the iteration is auto-captured into the bundle's
+   `trace/proposer_thinking.md`; `hypothesis.md` stays the curated hand-off.
 5. **Read the result**: open the new `result.json` and the new `heatmap.png`. Did it
    extend the Pareto frontier? Was the predicted effect confirmed or falsified? Note
    the outcome — a falsified hypothesis is valuable experience, not a failure to hide.

@@ -100,7 +100,21 @@ experience/<iter:03d>_<name>/
     fields.npz         # optional raw arrays
     breakdown.json     # = result.metadata (per-mechanism breakdown)
     solver.log         # optional evaluator stdout
+    proposer_thinking.md  # auto-captured: your raw thinking for this iteration
 ```
+
+`trace/proposer_thinking.md` is harvested automatically from the session
+transcript at eval time — best-effort, and only when the agent runtime
+persists thinking text (many configurations redact it to an empty string, in
+which case nothing is captured). **Never rely on it existing**: `hypothesis.md`
+is the reasoning trace of record, so author it fully. The `reasoning` field
+must cover, in order:
+
+1. **Evidence** — which bundles/heatmaps you read and what they showed (numbers).
+2. **Options considered** — the moves you rejected and why (a dominated-move
+   analysis is the most valuable line for future iterations).
+3. **Mechanism argument** — the calculation or physical reasoning.
+4. **Falsifiable prediction** — expected values and what outcome falsifies it.
 
 ### `hypothesis.md` front-matter (you author the reasoning; the runner fills `status`)
 ```

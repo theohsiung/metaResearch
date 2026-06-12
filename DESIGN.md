@@ -271,9 +271,24 @@ trace/
   fields.npz         # optional raw arrays (evaluator-produced)
   breakdown.json     # = result.metadata (per-mechanism breakdown)
   solver.log         # optional evaluator stdout
+  proposer_thinking.md  # best-effort: raw thinking harvested at eval time by the
+                        # runtime adapter (thinking/ package)
 ```
-`hypothesis.md` IS the reasoning trace (authored by the agent, per fusion rule §1.1.6):
-it records what prior evidence / heatmaps were inspected and why this design follows.
+`hypothesis.md` IS the curated reasoning trace (authored by the agent, per fusion
+rule §1.1.6): it records what prior evidence / heatmaps were inspected and why this
+design follows. `trace/proposer_thinking.md` complements it with the *raw* thinking
+blocks (options considered and rejected, calculations) harvested automatically by
+`meta_research/thinking/` between `record()` and the commit. Recovery is
+runtime-specific, so each agent runtime gets a `ThinkingSource` adapter
+(`thinking/claude_code.py` today; a Codex adapter would be one more module
+registered in `SOURCES`, mirroring the `evaluators/` pattern) — session transcripts
+are not durable (compaction discards old blocks) and many agent runtimes redact
+thinking text entirely (blocks persist with only a signature), so the capture is
+strictly best-effort and `hypothesis.md` remains the reasoning trace of record.
+Auto-discovered transcripts are harvested only when
+their last eval/seed marker references the current candidate (affinity guard), so a
+foreign session can never pollute the ledger; `META_RESEARCH_TRANSCRIPT` overrides
+discovery explicitly.
 
 ### 7.2 `hypothesis.md` front-matter
 ```
