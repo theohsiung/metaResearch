@@ -204,6 +204,64 @@ def test_capture_never_raises_on_corrupt_transcript(
 
 
 # --------------------------------------------------------------------------- #
+# source registry: runtime adapters are pluggable (Claude Code today; a Codex
+# adapter would be one more entry, never a change to capture_thinking)
+# --------------------------------------------------------------------------- #
+def test_capture_uses_first_source_that_yields_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import meta_research.thinking as thinking_pkg
+
+    class _Empty:
+        name = "empty-runtime"
+
+        def harvest(self, run_dir, candidate):
+            return None
+
+    class _Fake:
+        name = "fake-runtime"
+
+        def harvest(self, run_dir, candidate):
+            return f"fake thinking for {candidate}"
+
+    monkeypatch.setattr(thinking_pkg, "SOURCES", (_Empty(), _Fake()))
+    monkeypatch.delenv("META_RESEARCH_TRANSCRIPT", raising=False)
+    bundle = _record_bundle(tmp_path)
+
+    dest = capture_thinking(tmp_path, bundle, name="d1")
+
+    assert dest is not None
+    body = dest.read_text(encoding="utf-8")
+    assert "fake thinking for d1" in body
+    assert "fake-runtime" in body, "the trace header should name its source"
+
+
+def test_capture_survives_a_crashing_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import meta_research.thinking as thinking_pkg
+
+    class _Broken:
+        name = "broken-runtime"
+
+        def harvest(self, run_dir, candidate):
+            raise RuntimeError("adapter exploded")
+
+    class _Fake:
+        name = "fake-runtime"
+
+        def harvest(self, run_dir, candidate):
+            return "recovered thinking"
+
+    monkeypatch.setattr(thinking_pkg, "SOURCES", (_Broken(), _Fake()))
+    bundle = _record_bundle(tmp_path)
+
+    dest = capture_thinking(tmp_path, bundle, name="d1")
+
+    assert dest is not None and "recovered thinking" in dest.read_text(encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- #
 # affinity guard: auto-discovered transcripts must belong to THIS loop
 # --------------------------------------------------------------------------- #
 def _fake_claude_home(tmp_path: Path, lines: list[str]) -> Path:

@@ -1,24 +1,22 @@
-"""Best-effort capture of the proposer's thinking trace into the bundle.
+"""Claude Code thinking source: harvest from the session transcript JSONL.
 
-Meta-Harness (DESIGN §1, "store everything") asks for the proposer's *thinking
-blocks*, not just the curated ``hypothesis.md`` hand-off. When the research
-loop runs inside Claude Code, the session transcript (a JSONL file under
-``~/.claude/projects/<slug>/``) already contains every thinking block -- but
-transcripts are NOT durable: context compaction discards old blocks. The only
-reliable copy is the one harvested into the ledger at eval time, which is what
-this module does.
+Claude Code persists each session as a JSONL file under
+``~/.claude/projects/<slug>/``; assistant messages carry ``message.content[]``
+items of ``{"type": "thinking", "thinking": ...}``. Two hard caveats shape
+this adapter:
 
-How the window is chosen: the blocks that produced the *current* candidate are
-exactly those since the previous ``meta-research eval``/``seed`` invocation
-(inspection commands like ``frontier``/``progress``/``kg`` are not boundaries).
-The current eval's own tool_use is already in the transcript when the runner
+* Transcripts are not durable -- context compaction discards old blocks, so
+  only an at-eval-time harvest can be reliable.
+* Some configurations redact thinking text entirely (blocks persist with an
+  empty string plus a signature). Harvesting then yields nothing, by design:
+  ``hypothesis.md`` remains the reasoning trace of record.
+
+Window selection: the blocks that produced the *current* candidate are those
+since the previous ``meta-research eval``/``seed`` invocation (inspection
+commands like ``frontier``/``progress``/``kg`` are not boundaries). The
+current eval's own tool_use is already in the transcript when the runner
 executes, so the window is "between the last two eval markers" (or everything
 before the only marker / the whole file when none exist).
-
-Everything here is best-effort by contract: a missing transcript, a foreign
-agent runtime, or a corrupt file yields ``None`` -- never an exception. The
-runner calls :func:`capture_thinking` between ``record()`` and the git commit,
-so the captured trace lands in the same commit as its bundle.
 """
 
 from __future__ import annotations
@@ -35,17 +33,39 @@ logger = logging.getLogger(__name__)
 #: Environment override for the transcript location (also used by tests).
 TRANSCRIPT_ENV = "META_RESEARCH_TRANSCRIPT"
 
-#: File name inside the bundle's trace/ directory.
-THINKING_FILENAME = "proposer_thinking.md"
-
 #: A command is an iteration boundary iff it invokes the meta-research
 #: evaluation plumbing (CLI script name or python -m module form). Same-line
 #: only: real invocations never wrap, and cross-line matching would turn
 #: heredocs that merely mention both words into false boundaries.
 _BOUNDARY_RE = re.compile(r"meta[-_]research(\.cli)?\b[^\n]*\b(eval|seed)\b")
 
-#: Cap the captured text so a pathological session cannot bloat the ledger.
-_MAX_CHARS = 500_000
+
+class ClaudeCodeSource:
+    """Recover the proposer's thinking from a Claude Code session transcript."""
+
+    name = "claude-code"
+
+    def harvest(self, run_dir: Path | str, candidate: str) -> str | None:
+        """Return this iteration's thinking text, or ``None`` when unavailable.
+
+        Auto-discovered transcripts pass an affinity guard (the last eval/seed
+        marker must reference ``candidate``) so a foreign session can never
+        pollute the ledger; a transcript named by :data:`TRANSCRIPT_ENV` is
+        trusted unconditionally.
+        """
+        trusted = bool(os.environ.get(TRANSCRIPT_ENV))
+        transcript = find_transcript(run_dir)
+        if transcript is None:
+            logger.debug("no Claude Code transcript found; nothing to harvest")
+            return None
+        blocks, boundaries = _scan(transcript)
+        if not trusted and not _is_this_loops_session(boundaries, candidate):
+            logger.debug(
+                "transcript %s does not reference this eval; skipping", transcript
+            )
+            return None
+        text = _window_text(blocks, boundaries)
+        return text if text.strip() else None
 
 
 # --------------------------------------------------------------------------- #
@@ -129,52 +149,6 @@ def _window_text(
     return "\n\n---\n\n".join(text for i, text in blocks if lo < i < hi)
 
 
-def capture_thinking(
-    run_dir: Path | str, bundle: Path | str, *, name: str = ""
-) -> Path | None:
-    """Write the current iteration's thinking into ``<bundle>/trace/``.
-
-    Returns the written path, or ``None`` when there is nothing to capture
-    (no transcript found, empty window, or any error -- logged, never raised).
-    A pointer line is appended to the bundle's ``hypothesis.md`` so readers of
-    the curated hand-off can find the raw trace.
-    """
-    try:
-        trusted = bool(os.environ.get(TRANSCRIPT_ENV))
-        transcript = find_transcript(run_dir)
-        if transcript is None:
-            logger.debug("no session transcript found; skipping thinking capture")
-            return None
-        blocks, boundaries = _scan(transcript)
-        if not trusted and not _is_this_loops_session(boundaries, name):
-            logger.debug(
-                "transcript %s does not reference this eval; skipping capture",
-                transcript,
-            )
-            return None
-        text = _window_text(blocks, boundaries)
-        if not text.strip():
-            return None
-        if len(text) > _MAX_CHARS:
-            text = text[:_MAX_CHARS] + "\n\n[truncated: thinking exceeded size cap]"
-
-        trace_dir = Path(bundle) / "trace"
-        trace_dir.mkdir(parents=True, exist_ok=True)
-        dest = trace_dir / THINKING_FILENAME
-        header = (
-            f"# Proposer thinking — {name or Path(bundle).name}\n\n"
-            "Raw thinking blocks harvested from the session transcript at eval\n"
-            "time (best-effort; includes options considered and rejected).\n"
-            "The curated hand-off remains `hypothesis.md`.\n\n---\n\n"
-        )
-        dest.write_text(header + text + "\n", encoding="utf-8")
-        _append_pointer(Path(bundle) / "hypothesis.md")
-        return dest
-    except Exception as exc:  # noqa: BLE001 -- best-effort by contract
-        logger.warning("thinking capture failed: %s", exc)
-        return None
-
-
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
@@ -220,24 +194,4 @@ def _is_this_loops_session(boundaries: list[tuple[int, str]], name: str) -> bool
     return bool(name) and re.search(rf"\b{re.escape(name)}\b", last) is not None
 
 
-def _append_pointer(hypothesis_path: Path) -> None:
-    """Append a one-line pointer to the raw trace; idempotent, best-effort."""
-    try:
-        if not hypothesis_path.is_file():
-            return
-        text = hypothesis_path.read_text(encoding="utf-8")
-        if THINKING_FILENAME in text:
-            return
-        pointer = f"\nFull thinking trace: `trace/{THINKING_FILENAME}`\n"
-        hypothesis_path.write_text(text.rstrip("\n") + "\n" + pointer, encoding="utf-8")
-    except OSError as exc:
-        logger.warning("could not append thinking pointer: %s", exc)
-
-
-__all__ = [
-    "capture_thinking",
-    "find_transcript",
-    "harvest_window",
-    "THINKING_FILENAME",
-    "TRANSCRIPT_ENV",
-]
+__all__ = ["ClaudeCodeSource", "find_transcript", "harvest_window", "TRANSCRIPT_ENV"]
