@@ -279,8 +279,10 @@ rule §1.1.6): it records what prior evidence / heatmaps were inspected and why 
 design follows. `trace/proposer_thinking.md` complements it with the *raw* thinking
 blocks (options considered and rejected, calculations) harvested automatically by
 `meta_research/thinking.py` between `record()` and the commit — session transcripts
-are not durable (compaction discards old blocks), so the ledger copy made at eval
-time is the only reliable one. Auto-discovered transcripts are harvested only when
+are not durable (compaction discards old blocks) and many agent runtimes redact
+thinking text entirely (blocks persist with only a signature), so the capture is
+strictly best-effort and `hypothesis.md` remains the reasoning trace of record.
+Auto-discovered transcripts are harvested only when
 their last eval/seed marker references the current candidate (affinity guard), so a
 foreign session can never pollute the ledger; `META_RESEARCH_TRANSCRIPT` overrides
 discovery explicitly.

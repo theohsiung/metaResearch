@@ -104,11 +104,17 @@ experience/<iter:03d>_<name>/
 ```
 
 `trace/proposer_thinking.md` is harvested automatically from the session
-transcript at eval time (best-effort; includes the options you considered and
-rejected). You do NOT need to write it — but it does not replace
-`hypothesis.md`: keep authoring the curated reasoning there, it is what future
-iterations read first. Dig into a bundle's `proposer_thinking.md` when you need
-to know *why an alternative was rejected* at that iteration.
+transcript at eval time — best-effort, and only when the agent runtime
+persists thinking text (many configurations redact it to an empty string, in
+which case nothing is captured). **Never rely on it existing**: `hypothesis.md`
+is the reasoning trace of record, so author it fully. The `reasoning` field
+must cover, in order:
+
+1. **Evidence** — which bundles/heatmaps you read and what they showed (numbers).
+2. **Options considered** — the moves you rejected and why (a dominated-move
+   analysis is the most valuable line for future iterations).
+3. **Mechanism argument** — the calculation or physical reasoning.
+4. **Falsifiable prediction** — expected values and what outcome falsifies it.
 
 ### `hypothesis.md` front-matter (you author the reasoning; the runner fills `status`)
 ```
