@@ -53,6 +53,27 @@ def test_init_from_water_cooling_copies_example_without_artifacts(tmp_path: Path
     assert _has_commit(target)
 
 
+def test_init_from_example_excludes_generated_kg(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A user who actually ran the example leaves generated artifacts behind
+    # (kg.json like frontier.json/results.tsv). Scaffolding must not copy them.
+    import shutil
+
+    examples_root = tmp_path / "examples"
+    src = examples_root / "water_cooling"
+    shutil.copytree(cli._examples_root() / "water_cooling", src)
+    (src / "kg.json").write_text('{"version": 1, "nodes": []}', encoding="utf-8")
+    (src / "frontier.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(cli, "_examples_root", lambda: examples_root)
+
+    assert _init(tmp_path, "exp_kg", from_example="water_cooling") == 0
+    target = tmp_path / "exp_kg"
+    assert (target / "prepare.py").is_file()
+    assert not (target / "kg.json").exists()
+    assert not (target / "frontier.json").exists()
+
+
 def test_init_unknown_example_errors(tmp_path: Path) -> None:
     assert _init(tmp_path, "exp3", from_example="does_not_exist") == 2
     assert not (tmp_path / "exp3").exists()

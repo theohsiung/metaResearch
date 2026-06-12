@@ -32,6 +32,7 @@ from .candidates import build_design, validate_candidate
 from .experience import Experience
 from .frontier import classify, load_frontier, update_frontier
 from .interfaces import DesignSpec, EvalResult, Objective, replace
+from .kg import write_kg
 from .logfmt import ResultsLog
 from .thinking import capture_thinking
 
@@ -311,6 +312,14 @@ def _finalize(
         update_frontier(run_dir, objectives)
     except Exception as exc:  # noqa: BLE001 — frontier maths must not sink the step
         result = _attach_metadata(result, {"frontier_error": repr(exc)})
+
+    # 5b. Rebuild the derived knowledge graph (DESIGN §7.6) — same
+    #     recompute-from-ledger model as the frontier, and like it, a failure
+    #     must never sink the step.
+    try:
+        write_kg(run_dir)
+    except Exception as exc:  # noqa: BLE001
+        result = _attach_metadata(result, {"kg_error": repr(exc)})
 
     # 6. Append a results.tsv row (header written lazily by ResultsLog).
     hyp_summary = _hypothesis_summary(hypothesis)
