@@ -204,6 +204,8 @@ performs the actual scoring.
    `result.metadata`. Returns the bundle dir.
 - `history() -> list[dict]` — parse all `result.json` + `hypothesis.md` front-matter
   into rows `{"iteration","name","status","scores","metadata","hypothesis","axis","parent"}`.
+  (`change` and `inspired_by` live in the front-matter per §7.2 but are not surfaced
+  in history rows; consumers that need them — e.g. `kg.py` — parse the bundle directly.)
 - `next_iteration() -> int` — highest existing bundle iteration + 1 (the agent does not
   track iteration counters by hand).
 - git helpers (subprocess, cwd=run_dir). git is the **audit/backup layer**; the agent's
@@ -235,12 +237,16 @@ commit: bool = False, tag: str | None = None) -> EvalResult`:
 1. `build_design(name, experiment.DESIGNS_DIR)` (validate interface first).
 2. `evaluator = experiment.make_evaluator()`; `result = evaluator.evaluate(design, bundle/trace)`.
 3. `experience.record(iteration=next_iteration(), name, design_src, design, result, hypothesis)`.
-4. `update_frontier(run_dir, experiment.OBJECTIVES)`; `classify` the candidate.
-5. `write_kg(run_dir)` — rebuild the derived knowledge graph (§7.6) from the
+4. `capture_thinking(run_dir, bundle, name)` — best-effort harvest of the proposer's
+   thinking into `trace/proposer_thinking.md` (§7.1); never sinks the step.
+5. `update_frontier(run_dir, experiment.OBJECTIVES)`; `classify` the candidate.
+   Then `write_kg(run_dir)` — rebuild the derived knowledge graph (§7.6) from the
    bundles; a failure attaches `kg_error` to `result.metadata`, never sinks the step.
 6. append a `results.tsv` row.
 7. if `commit`: `ensure_branch(tag)` then `commit(<message>)` — append-only
-   (`kg.json` rides in the same commit).
+   (`kg.json` and the thinking trace ride in the same commit) — then
+   `annotate_commit(bundle, sha)` writes the SHA into `result.json` (the annotation
+   itself is swept into the NEXT commit; a commit cannot contain its own SHA).
 8. return the `EvalResult` (the CLI prints scores + the heatmap path).
 
 `seed_baselines(experiment, run_dir, *, commit=False)` — evaluate every
