@@ -75,6 +75,10 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
   exploiting evaluator quirks, no fixtures tuned to one operating point.
 - **Append-only experience.** Every evaluated candidate is committed, whatever its
   status. The diagnostic traces are the data Meta-Harness depends on.
+- **Reasoning is a full record, not a summary.** hyp.json's `reasoning` is the
+  permanent thinking trace: evidence read, EVERY option weighed and why it was
+  rejected, the worked calculation, the falsifiable prediction. No length limit —
+  compression is a methodology violation (template in REFERENCE.md §4).
 
 See [REFERENCE.md](REFERENCE.md) for the mechanism-axis catalog, anti-overfit rules
 with examples, the experience-bundle + `hypothesis.md` schema, the git append-only +

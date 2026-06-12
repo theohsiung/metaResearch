@@ -111,10 +111,20 @@ is the reasoning trace of record, so author it fully. The `reasoning` field
 must cover, in order:
 
 1. **Evidence** — which bundles/heatmaps you read and what they showed (numbers).
-2. **Options considered** — the moves you rejected and why (a dominated-move
-   analysis is the most valuable line for future iterations).
-3. **Mechanism argument** — the calculation or physical reasoning.
+2. **Options considered** — EVERY move you weighed and why each was rejected (a
+   dominated-move analysis is the most valuable line for future iterations).
+3. **Mechanism argument** — the calculation or physical reasoning, worked out,
+   not just named.
 4. **Falsifiable prediction** — expected values and what outcome falsifies it.
+
+**The reasoning is a full record, NOT a summary.** It is the permanent thinking
+trace of this iteration — there is no length limit, and compressing it destroys
+exactly the evidence Meta-Harness depends on. Write it the way you actually
+reasoned: all candidate moves with their rejections, the arithmetic, the
+uncertainties. A future proposer (or a fresh session with no memory of yours)
+must be able to reconstruct the decision from this text alone. If three
+paragraphs feel long, that is the correct length; one compressed paragraph is
+a methodology violation, not concision.
 
 ### `hypothesis.md` front-matter (you author the reasoning; the runner fills `status`)
 ```
