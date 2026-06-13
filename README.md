@@ -182,11 +182,16 @@ See [`DESIGN.md`](./DESIGN.md) for the binding architecture contract and
 
 ## Acknowledgements
 
-This project stands on the shoulders of two prior works whose ideas it directly builds on:
+This project stands on the shoulders of three prior works whose ideas it directly builds on:
 
 - [karpathy/autoresearch](https://github.com/karpathy/autoresearch) — for the autonomous-research
   agent ergonomics and the append-only experience-ledger pattern.
 - [stanford-iris-lab/meta-harness](https://github.com/stanford-iris-lab/meta-harness) — for the
   meta-harness methodology that treats the harness itself as the artifact under optimization.
+- [china-qijizhifeng/agentic-harness-engineering](https://github.com/china-qijizhifeng/agentic-harness-engineering)
+  — for the *decision-observability* idea: recording an edit's predicted impact and then
+  automatically validating or refuting it. This inspired the prediction-calibration loop
+  (structured `expected` → derived verdict on each KG edge → `meta-research calibration`),
+  adapted to this project's tenets (never roll back — a falsified prediction is kept as experience).
 
-Huge thanks to the authors and contributors of both projects.
+Huge thanks to the authors and contributors of all three projects.
