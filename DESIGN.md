@@ -82,8 +82,9 @@ meta-research/
     candidates.py           # load + validate + build a design module from designs/
     experience.py           # experience-bundle store + git APPEND-ONLY ledger
     kg.py                   # derived knowledge graph: build_kg(), write_kg() -> kg.json (§7.6)
+    calibration.py          # derived hypothesis hit-rate: build_calibration() over kg edges (§7.6/§6.5)
     runner.py               # evaluate_and_record(): score one design -> bundle -> frontier -> kg -> results.tsv -> (opt) commit
-    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `init`
+    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `calibration`, `init`
     evaluators/
       __init__.py           # re-export the three adapters
       numerical.py          # NumericalEvaluator: wrap a pure-python simulate() callable
@@ -109,7 +110,8 @@ meta-research/
     test_interfaces.py
     test_frontier.py
     test_experience.py
-    test_kg.py              # param_diff/score_delta, build_kg nodes/edges/warnings, write_kg, CLI kg
+    test_kg.py              # param_diff/score_delta, build_kg nodes/edges/warnings, prediction verdicts, write_kg, CLI kg
+    test_calibration.py     # verdict aggregation: totals, hit_rate, by_objective, by_axis, CLI calibration
     test_runner.py          # eval one design -> bundle written, frontier + kg + tsv updated, append-only commit
     test_water_cooling.py
 ```
@@ -266,6 +268,12 @@ from `./<DESIGNS_DIR>/`:
   edge / warning counts. A pure ledger read (no `prepare.py` needed, like `frontier`);
   exists to backfill experiment dirs whose bundles predate the KG — every eval/seed
   already rebuilds it.
+- `meta-research calibration` — print the proposer's **hypothesis hit-rate**: how often
+  the structured `expected` prediction (§7.3) matched the realized `score_delta`,
+  aggregated over all `mutated-from` edges (§7.6) overall, per-objective, and per-axis.
+  A pure ledger read (no `prepare.py` needed, like `frontier`/`kg`); it derives from the
+  KG edges, persists nothing. `hit_rate = confirmed / (confirmed + refuted)` —
+  `inconclusive` verdicts are excluded from the denominator.
 - `meta-research init <name>` — scaffold a new experiment dir (prepare.py stub, designs/,
   program.md, plus a copy of the skill) — thin, optional.
 - Console script: `meta-research = meta_research.cli:main`.
@@ -314,11 +322,21 @@ axis: flow_arrangement          # mechanism axis (see SKILL.md)
 parent: pin_fins                # what it builds on (free-form, NOT a selection rule)
 change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 inspired_by: straight_fins, old_v2   # optional, comma-separated: other candidates drawn on
-expected: "R_th down, dP up"
+expected: '{"thermal_resistance":{"direction":"down","rel":0.08},"pressure_drop":{"direction":"up"}}'
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
 <prose: which prior heatmaps/results were inspected and what failure mode this targets>
 ```
+
+`expected` is a **structured, machine-checkable prediction** (schema 7.3): a JSON
+object `{<objective>: {"direction": "down"|"up", "rel"?: float}}`, serialized to a
+single JSON-string scalar on the front-matter line (the front-matter parser is
+line-based, so a nested block is not used). It is **optional** and
+**backward-compatible**: a free-text string (the old form) or an absent value simply
+yields no prediction verdict (§7.6). `direction` is the predicted sign of the change
+*relative to the parent* (`down` = the score value decreases); `rel` is the optional
+predicted relative magnitude `|Δ|/parent`. The prose body remains the full reasoning
+record — the structured `expected` is additive, not a replacement.
 
 ### 7.3 hypothesis hand-off (agent → `runner`)
 There is **no `pending_eval.json`** in the agent-driven model. The agent writes the
@@ -330,7 +348,10 @@ design module `designs/<name>.py`, then calls `meta-research eval <name>
   "parent": "pin_fins",
   "change": "inline -> staggered pin rows over the outlet half",
   "inspired_by": ["straight_fins"],
-  "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
+  "expected": {
+    "thermal_resistance": {"direction": "down", "rel": 0.08},
+    "pressure_drop": {"direction": "up"}
+  },
   "reasoning": "Iter 9's heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
 ```
@@ -338,6 +359,16 @@ design module `designs/<name>.py`, then calls `meta-research eval <name>
 the skill requires it (it is the reasoning trace). `parent` is the single design
 mutated; `inspired_by` (optional list) credits other candidates whose evidence shaped
 the hypothesis — both feed the knowledge graph's lineage edges (§7.6).
+
+`expected` is the agent's **falsifiable prediction**, made machine-checkable: a JSON
+object keyed by objective, each entry `{"direction": "down"|"up", "rel"?: float}`.
+`direction` is the predicted sign of `child − parent` for that objective (`down` =
+value decreases); `rel` (optional) is the predicted relative magnitude `|Δ|/parent`.
+It is **optional and backward-compatible** — a free-text string or an absent value is
+stored verbatim and produces no verdict. The engine compares each prediction against
+the realized `score_delta` and records the outcome on the KG edge (§7.6); the
+aggregate hit-rate is read with `meta-research calibration` (§6.5). The agent never
+self-grades — the verdict is a derived fact, like the frontier.
 
 ### 7.4 `frontier.json`
 ```json
@@ -389,7 +420,12 @@ of facts is navigation, not substitution).
      "axis": "flow_arrangement",
      "param_diff": {"changed": {"arrangement": ["inline", "staggered"]},
                     "added": {}, "removed": {}},
-     "score_delta": {"thermal_resistance": -0.019, "pressure_drop": 230.0}},
+     "score_delta": {"thermal_resistance": -0.019, "pressure_drop": 230.0},
+     "prediction": {"thermal_resistance": {"predicted_direction": "down",
+                      "verdict": "confirmed", "predicted_rel": 0.08,
+                      "actual_rel": 0.31, "rel_error": 0.23},
+                    "pressure_drop": {"predicted_direction": "up",
+                      "verdict": "confirmed"}}},
     {"kind": "inspired-by", "src": "000_straight_fins", "dst": "012_staggered_pin_v3"}
   ],
   "warnings": ["005_typo_child: parent 'strait_fins' not found in prior bundles"]
@@ -409,6 +445,17 @@ Pinned semantics:
   where the parent lacks the key).
 - **`inspired-by`** (0..n per node): from front-matter `inspired_by`; pure lineage
   pointers — no diff payload (cross-design diff semantics are undefined).
+- **`prediction`** (optional, on a `mutated-from` edge): present only when the child's
+  `expected` (§7.3) is the structured form. One entry per predicted objective:
+  `predicted_direction` (`down`/`up`), `verdict` (`confirmed`/`refuted`/`inconclusive`),
+  and — when computable — `predicted_rel`, `actual_rel`, `rel_error`. The verdict is a
+  **derived fact** (the engine computes it; the agent never self-grades — facts only,
+  consistent with the rest of the KG): `confirmed` iff the realized `score_delta` sign
+  matches the predicted direction; `refuted` iff it is opposite; `inconclusive` iff the
+  parent lacked that score *or* the relative change is below the dead-band (`|Δ|/parent
+  < 1e-3` — a change too small to credit a direction). A `refuted` prediction is kept,
+  not hidden — a falsified hypothesis is high-value experience. The run-level hit-rate
+  is aggregated by `meta-research calibration` (§6.5).
 - **Unresolvable names** go to `warnings` (never silent, never fatal). Malformed
   bundles are skipped with a warning.
 - **Deterministic**: nodes sorted by `(iteration, name)`, edges by

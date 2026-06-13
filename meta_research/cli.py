@@ -8,6 +8,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research seed [--commit] [--run-dir DIR]
     meta-research frontier [--run-dir DIR]
     meta-research kg [--run-dir DIR]
+    meta-research calibration [--run-dir DIR]
     meta-research progress [--out DIR] [--run-dir DIR]
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
@@ -304,6 +305,53 @@ def cmd_kg(args: argparse.Namespace) -> int:
     return 0
 
 
+def _fmt_rate(rate: float | None, tally: dict[str, Any]) -> str:
+    """Render a hit-rate as ``66.7% (2/3 decided)`` or ``n/a`` when undecided."""
+    decided = int(tally.get("confirmed", 0)) + int(tally.get("refuted", 0))
+    if rate is None:
+        return logfmt.dim(f"n/a (0 of {int(tally.get('predictions', 0))} decided)")
+    return f"{rate * 100:.1f}% ({int(tally['confirmed'])}/{decided} decided)"
+
+
+def cmd_calibration(args: argparse.Namespace) -> int:
+    """`meta-research calibration` — print the proposer's hypothesis hit-rate (DESIGN §6.5).
+
+    A pure ledger read like `frontier`/`kg`: no prepare.py required. Derives from
+    the KG edges' prediction verdicts (§7.6); persists nothing.
+    """
+    run_dir = Path(args.run_dir).resolve()
+    from .calibration import build_calibration
+
+    try:
+        report = build_calibration(run_dir)
+    except (OSError, TypeError, ValueError) as exc:
+        _err(f"could not compute calibration: {exc}")
+        return 1
+
+    totals = report["totals"]
+    print(
+        logfmt.bold("hypothesis calibration: ")
+        + f"{totals['predictions']} prediction(s) — "
+        + f"{totals['confirmed']} confirmed, {totals['refuted']} refuted, "
+        + f"{totals['inconclusive']} inconclusive"
+    )
+    print(f"  hit-rate: {_fmt_rate(report['hit_rate'], totals)}")
+
+    by_objective = report.get("by_objective", {})
+    if by_objective:
+        print(logfmt.bold("by objective"))
+        for name, summary in sorted(by_objective.items()):
+            print(f"  {name}: {_fmt_rate(summary['hit_rate'], summary)}")
+
+    by_axis = report.get("by_axis", {})
+    if by_axis:
+        print(logfmt.bold("by axis"))
+        for axis, summary in sorted(by_axis.items()):
+            label = axis or "(unlabelled)"
+            print(f"  {label}: {_fmt_rate(summary['hit_rate'], summary)}")
+    return 0
+
+
 def cmd_progress(args: argparse.Namespace) -> int:
     """`meta-research progress` — plot best-so-far curves + Pareto evolution (DESIGN §6.5).
 
@@ -498,6 +546,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)
     p_kg.set_defaults(func=cmd_kg)
+
+    p_calib = sub.add_parser(
+        "calibration", help="print the proposer's hypothesis hit-rate (predicted vs realized)"
+    )
+    add_run_dir(p_calib)
+    p_calib.set_defaults(func=cmd_calibration)
 
     p_prog = sub.add_parser("progress", help="plot best-so-far curves + Pareto evolution (progress.png)")
     p_prog.add_argument("--out", default=None, help="output dir for PNGs (default: run dir)")

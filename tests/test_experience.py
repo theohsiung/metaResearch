@@ -535,3 +535,47 @@ def test_history_multiple_rows_sorted(git_repo: Path, design_src: Path) -> None:
     assert {r["name"] for r in rows} == {"straight_fins", "pin_fins"}
     iters = [r["iteration"] for r in rows]
     assert sorted(iters) == [0, 1]
+
+
+# --------------------------------------------------------------------------- #
+# structured `expected` prediction round-trips through hypothesis.md (§7.2/§7.3)
+# --------------------------------------------------------------------------- #
+def test_structured_expected_roundtrips_as_json_in_frontmatter(tmp_path: Path) -> None:
+    # A dict `expected` (the machine-checkable prediction) must survive the
+    # front-matter round-trip as JSON, so kg.py can parse it back (§7.6).
+    exp = Experience(tmp_path, OBJECTIVES)
+    expected = {
+        "thermal_resistance": {"direction": "down", "rel": 0.08},
+        "pressure_drop": {"direction": "up"},
+    }
+    bundle = exp.record(
+        iteration=0,
+        name="staggered_pin",
+        design_src_path=tmp_path / "no_such.py",
+        design=DesignSpec(params={"fin_type": "pin"}),
+        result=EvalResult(scores={"thermal_resistance": 0.042, "pressure_drop": 820.0}),
+        hypothesis={
+            "axis": "flow_arrangement",
+            "parent": "pin_fins",
+            "expected": expected,
+            "reasoning": "stagger the pins over the hot band",
+            "status": "frontier",
+        },
+    )
+    front, _prose = experience_module._read_hypothesis(bundle / "hypothesis.md")
+    assert json.loads(front["expected"]) == expected
+
+
+def test_string_expected_is_preserved_verbatim(tmp_path: Path) -> None:
+    # Backward compatibility: the old free-text form is stored as-is (no verdict).
+    exp = Experience(tmp_path, OBJECTIVES)
+    bundle = exp.record(
+        iteration=0,
+        name="straight_fins",
+        design_src_path=tmp_path / "no_such.py",
+        design=DesignSpec(params={"fin_type": "straight"}),
+        result=EvalResult(scores={"thermal_resistance": 0.061, "pressure_drop": 410.0}),
+        hypothesis={"axis": "baseline", "expected": "R_th down, dP up", "status": "frontier"},
+    )
+    front, _prose = experience_module._read_hypothesis(bundle / "hypothesis.md")
+    assert front["expected"] == "R_th down, dP up"

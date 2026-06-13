@@ -115,7 +115,10 @@ must cover, in order:
    dominated-move analysis is the most valuable line for future iterations).
 3. **Mechanism argument** — the calculation or physical reasoning, worked out,
    not just named.
-4. **Falsifiable prediction** — expected values and what outcome falsifies it.
+4. **Falsifiable prediction** — the structured `expected` (per-objective
+   `{direction, rel?}`); the engine grades it against the realized `score_delta`
+   and records the verdict on the KG edge (§5), so name the direction you would be
+   wrong about, not just the hoped-for one.
 
 **The reasoning is a full record, NOT a summary.** It is the permanent thinking
 trace of this iteration — there is no length limit, and compressing it destroys
@@ -135,7 +138,7 @@ axis: arrangement              # one of the mechanism axes in §1
 parent: pin_fins               # what it builds on (free-form, NOT a selection rule)
 change: "inline -> staggered pin rows over the outlet half"   # WHAT was changed (one line)
 inspired_by: straight_fins, old_v2   # optional: other candidates whose evidence you drew on
-expected: "R_th down, dP up"
+expected: '{"thermal_resistance":{"direction":"down","rel":0.08},"pressure_drop":{"direction":"up"}}'
 status: frontier|dominated|infeasible|crash   # filled by the loop after eval
 ---
 <prose: which prior heatmaps/results you inspected, the failure mode this targets,
@@ -151,7 +154,10 @@ You write the design module, then pass this JSON; the runner folds it into
   "parent": "pin_fins",
   "change": "inline -> staggered pin rows over the outlet half",
   "inspired_by": ["straight_fins"],
-  "expected": "thermal_resistance down ~8%, pressure_drop up ~15%",
+  "expected": {
+    "thermal_resistance": {"direction": "down", "rel": 0.08},
+    "pressure_drop": {"direction": "up"}
+  },
   "reasoning": "Iter 9 heatmap showed a hot band over the outlet half; staggering the pin rows there raises local h where it matters."
 }
 ```
@@ -163,6 +169,17 @@ it concrete: name the mechanism before and after, not the hoped-for effect. `par
 is the single design you mutated; `inspired_by` (optional) credits other candidates
 whose evidence shaped the hypothesis — both feed the knowledge graph's lineage
 edges (§5).
+
+`expected` is a **structured, machine-checkable prediction**: a JSON object keyed by
+objective, each `{"direction": "down"|"up", "rel"?: float}` (`direction` = the sign of
+`child − parent`; `rel` = optional predicted relative magnitude `|Δ|/parent`). The
+engine compares it against the realized `score_delta` and records a `verdict`
+(`confirmed` / `refuted` / `inconclusive`) on the KG edge (§5); `meta-research
+calibration` aggregates the run-level hit-rate (overall / per-objective / per-axis).
+It is optional and backward-compatible — a free-text string still works but earns no
+verdict. The structured prediction does **not** replace the prose `reasoning`: keep
+the full falsifiable argument in the reasoning body; `expected` is only the slice the
+engine can grade.
 
 ---
 

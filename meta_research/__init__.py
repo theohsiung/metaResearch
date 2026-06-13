@@ -31,6 +31,7 @@ from .interfaces import (
 from .frontier import dominates, pareto_front, update_frontier
 from .experience import Experience
 from .kg import build_kg, write_kg
+from .calibration import build_calibration
 from .runner import evaluate_and_record, seed_baselines
 
 __version__ = "0.1.0"
@@ -51,6 +52,8 @@ __all__ = [
     # knowledge graph
     "build_kg",
     "write_kg",
+    # calibration (derived hypothesis hit-rate)
+    "build_calibration",
     # runner
     "evaluate_and_record",
     "seed_baselines",
