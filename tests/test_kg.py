@@ -35,6 +35,7 @@ def _record_bundle(
     parent: str = "",
     axis: str = "geometry",
     inspired_by: list[str] | None = None,
+    expected: dict[str, Any] | str | None = None,
     error: str | None = None,
     feasible: bool = True,
 ) -> None:
@@ -47,7 +48,7 @@ def _record_bundle(
     hypothesis: dict[str, Any] = {
         "axis": axis,
         "parent": parent,
-        "expected": "",
+        "expected": expected if expected is not None else "",
         "reasoning": "test bundle",
         "status": status,
     }
@@ -469,3 +470,145 @@ def test_cli_kg_backfills_existing_experiment_dir(
     assert "2 nodes" in out
     assert "1 edges" in out
     assert "0 warnings" in out
+
+
+# --------------------------------------------------------------------------- #
+# build_kg — prediction verdict on mutated-from edges (DESIGN §7.6)
+# The engine compares the child's structured `expected` (§7.3) against the
+# realized score_delta and records a derived verdict — facts only, no self-grading.
+# --------------------------------------------------------------------------- #
+def _mutated_edge(graph: dict[str, Any]) -> dict[str, Any]:
+    return next(e for e in graph["edges"] if e["kind"] == "mutated-from")
+
+
+def test_prediction_confirmed_when_direction_matches_delta(tmp_path: Path) -> None:
+    _record_bundle(
+        tmp_path, 0, "pin_fins",
+        params={"fin_type": "pin", "arrangement": "inline"},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 590.0},
+        status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "staggered_pin",
+        params={"fin_type": "pin", "arrangement": "staggered"},
+        scores={"thermal_resistance": 0.042, "pressure_drop": 820.0},
+        status="frontier", parent="pin_fins", axis="flow_arrangement",
+        expected={
+            "thermal_resistance": {"direction": "down", "rel": 0.08},
+            "pressure_drop": {"direction": "up"},
+        },
+    )
+
+    pred = _mutated_edge(build_kg(tmp_path))["prediction"]
+
+    tr = pred["thermal_resistance"]
+    assert tr["predicted_direction"] == "down"
+    assert tr["verdict"] == "confirmed"
+    assert tr["predicted_rel"] == pytest.approx(0.08)
+    assert tr["actual_rel"] == pytest.approx(0.019 / 0.061)
+    assert tr["rel_error"] == pytest.approx(0.019 / 0.061 - 0.08)
+    # No `rel` predicted for pressure_drop -> only direction + verdict, nothing else.
+    assert pred["pressure_drop"] == {"predicted_direction": "up", "verdict": "confirmed"}
+
+
+def test_prediction_refuted_when_direction_opposes_delta(tmp_path: Path) -> None:
+    _record_bundle(
+        tmp_path, 0, "pin_fins", params={"a": 1},
+        scores={"thermal_resistance": 0.05, "pressure_drop": 600.0}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "worse", params={"a": 2},
+        scores={"thermal_resistance": 0.07, "pressure_drop": 600.0},  # went UP, predicted down
+        parent="pin_fins",
+        expected={"thermal_resistance": {"direction": "down"}},
+    )
+
+    pred = _mutated_edge(build_kg(tmp_path))["prediction"]
+    assert pred["thermal_resistance"]["verdict"] == "refuted"
+
+
+def test_prediction_inconclusive_within_dead_band(tmp_path: Path) -> None:
+    # |Δ|/parent = 1e-4 < 1e-3: a change too small to credit a direction.
+    _record_bundle(
+        tmp_path, 0, "base", params={"a": 1},
+        scores={"thermal_resistance": 1.0, "pressure_drop": 500.0}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "tiny", params={"a": 2},
+        scores={"thermal_resistance": 0.9999, "pressure_drop": 500.0},
+        parent="base",
+        expected={"thermal_resistance": {"direction": "down"}},
+    )
+
+    pred = _mutated_edge(build_kg(tmp_path))["prediction"]
+    assert pred["thermal_resistance"]["verdict"] == "inconclusive"
+
+
+def test_prediction_inconclusive_when_parent_lacks_that_score(tmp_path: Path) -> None:
+    # Parent never scored thermal_resistance: the delta is a fact we cannot state.
+    _record_bundle(
+        tmp_path, 0, "partial", params={"a": 1},
+        scores={"pressure_drop": 590.0}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "child", params={"a": 2},
+        scores={"thermal_resistance": 0.042, "pressure_drop": 820.0},
+        parent="partial",
+        expected={"thermal_resistance": {"direction": "down"}},
+    )
+
+    pred = _mutated_edge(build_kg(tmp_path))["prediction"]
+    assert pred["thermal_resistance"]["verdict"] == "inconclusive"
+
+
+def test_string_expected_yields_no_prediction_block(tmp_path: Path) -> None:
+    # Backward compatibility: legacy free-text `expected` produces no verdict.
+    _record_bundle(
+        tmp_path, 0, "pin_fins", params={"a": 1},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 590.0}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "child", params={"a": 2},
+        scores={"thermal_resistance": 0.042, "pressure_drop": 820.0},
+        parent="pin_fins", expected="R_th down, dP up",
+    )
+
+    assert "prediction" not in _mutated_edge(build_kg(tmp_path))
+
+
+def test_prediction_persists_through_write_kg_as_strict_json(tmp_path: Path) -> None:
+    import json
+
+    _record_bundle(
+        tmp_path, 0, "pin_fins", params={"a": 1},
+        scores={"thermal_resistance": 0.061, "pressure_drop": 590.0}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "staggered_pin", params={"a": 2},
+        scores={"thermal_resistance": 0.042, "pressure_drop": 820.0},
+        parent="pin_fins",
+        expected={"thermal_resistance": {"direction": "down", "rel": 0.08}},
+    )
+
+    path = write_kg(tmp_path)
+    doc = json.loads(path.read_text(encoding="utf-8"), parse_constant=lambda c: (_ for _ in ()).throw(AssertionError(c)))
+    edge = next(e for e in doc["edges"] if e["kind"] == "mutated-from")
+    assert edge["prediction"]["thermal_resistance"]["verdict"] == "confirmed"
+
+
+def test_bool_rel_is_ignored_not_treated_as_a_number(tmp_path: Path) -> None:
+    # bool is an int subclass; a stray JSON `true` must NOT become rel=1.0.
+    _record_bundle(
+        tmp_path, 0, "base", params={"a": 1},
+        scores={"thermal_resistance": 0.06}, status="frontier",
+    )
+    _record_bundle(
+        tmp_path, 1, "child", params={"a": 2},
+        scores={"thermal_resistance": 0.05}, parent="base",
+        expected={"thermal_resistance": {"direction": "down", "rel": True}},
+    )
+
+    entry = _mutated_edge(build_kg(tmp_path))["prediction"]["thermal_resistance"]
+    assert entry["verdict"] == "confirmed"
+    assert "predicted_rel" not in entry
+    assert "actual_rel" not in entry

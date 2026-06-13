@@ -14,6 +14,7 @@ from the ledger — derived views are recomputed, only bundles are appended.
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,108 @@ def score_delta(
     }
 
 
+#: Relative dead-band below which a score change is too small to credit a
+#: predicted direction (DESIGN §7.6) — ``|Δ|/|parent| < this`` is ``inconclusive``.
+PREDICTION_DEAD_BAND_REL = 1e-3
+
+
+def _parse_expected(raw: Any) -> dict[str, Any]:
+    """Parse the front-matter ``expected`` scalar (schema 7.3) into a dict.
+
+    The structured prediction is stored as a JSON string; a legacy free-text
+    value (or absent/garbage) yields an empty dict — no verdict. Never raises.
+    """
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _verdict(direction: str, delta: float | None, parent_value: Any) -> str:
+    """Confirmed / refuted / inconclusive for one predicted objective (DESIGN §7.6).
+
+    ``inconclusive`` when the parent lacked that score (``delta is None``) or the
+    relative change is within the dead-band; otherwise ``confirmed`` iff the sign
+    of ``delta`` matches the predicted ``direction`` (``down`` = value decreases),
+    ``refuted`` if it is opposite. A derived fact — the agent never self-grades.
+
+    When the parent score is zero or non-numeric the relative dead-band is
+    undefined; only an exactly-zero ``delta`` is then ``inconclusive`` (a nonzero
+    ``delta`` still receives a directional verdict). In practice ``parent_value``
+    always arrives as a finite float (the scores are pre-filtered upstream).
+    """
+    if delta is None:
+        return "inconclusive"
+    if (
+        isinstance(parent_value, (int, float))
+        and math.isfinite(parent_value)
+        and parent_value != 0
+    ):
+        if abs(delta) / abs(parent_value) < PREDICTION_DEAD_BAND_REL:
+            return "inconclusive"
+    elif delta == 0:
+        return "inconclusive"
+    if direction == "down":
+        return "confirmed" if delta < 0 else "refuted"
+    return "confirmed" if delta > 0 else "refuted"
+
+
+def _actual_rel(delta: float | None, parent_value: Any) -> float | None:
+    """Realized relative magnitude ``|delta|/|parent|`` when computable, else None."""
+    if (
+        delta is None
+        or not isinstance(parent_value, (int, float))
+        or not math.isfinite(parent_value)
+        or parent_value == 0
+    ):
+        return None
+    return abs(delta) / abs(parent_value)
+
+
+def build_prediction(
+    expected: dict[str, Any],
+    parent_scores: dict[str, float],
+    deltas: dict[str, float | None],
+) -> dict[str, Any]:
+    """Derive the per-objective verdict block for a mutated-from edge (DESIGN §7.6).
+
+    Only objectives the child predicted with a valid ``direction`` get an entry.
+    Magnitude facts (``predicted_rel`` / ``actual_rel`` / ``rel_error``) are
+    attached only when the child predicted a ``rel`` and the realized magnitude is
+    computable. Returns an empty dict when there is no valid prediction (the caller
+    then omits the ``prediction`` key entirely).
+    """
+    prediction: dict[str, Any] = {}
+    for obj, spec in expected.items():
+        if not isinstance(spec, dict):
+            continue
+        direction = spec.get("direction")
+        if direction not in ("down", "up"):
+            continue
+        delta = deltas.get(obj)
+        parent_value = parent_scores.get(obj)
+        entry: dict[str, Any] = {
+            "predicted_direction": direction,
+            "verdict": _verdict(direction, delta, parent_value),
+        }
+        predicted_rel = spec.get("rel")
+        if (
+            isinstance(predicted_rel, (int, float))
+            and not isinstance(predicted_rel, bool)  # bool is an int subclass
+            and math.isfinite(predicted_rel)
+        ):
+            entry["predicted_rel"] = float(predicted_rel)
+            actual_rel = _actual_rel(delta, parent_value)
+            if actual_rel is not None:
+                entry["actual_rel"] = actual_rel
+                entry["rel_error"] = actual_rel - float(predicted_rel)
+        prediction[obj] = entry
+    return prediction
+
+
 # ----------------------------------------------------------------------------
 # Building the graph from the ledger
 # ----------------------------------------------------------------------------
@@ -85,7 +188,10 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
     Pure read: one node per parseable bundle (kept, dominated, infeasible, or
     crashed — store everything). Malformed bundles are skipped with a
     ``warnings`` entry; an absent/empty ``experience/`` dir yields an empty
-    graph. Never raises for ledger content problems.
+    graph. Never raises for ledger content problems found while parsing bundles;
+    edge-building runs on already-normalized rows (finite scores, dict
+    ``expected``) and any residual fault is caught by the runner's KG-rebuild
+    guard (§6.4).
     """
     run_dir = Path(run_dir)
     experience_dir = run_dir / EXPERIENCE_DIRNAME
@@ -118,16 +224,21 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
                     f"{row['id']}: parent {parent_name!r} not found in prior bundles"
                 )
             else:
-                edges.append(
-                    {
-                        "kind": "mutated-from",
-                        "src": parent["id"],
-                        "dst": row["id"],
-                        "axis": row["axis"],
-                        "param_diff": param_diff(parent["params"], row["params"]),
-                        "score_delta": score_delta(row["scores"], parent["scores"]),
-                    }
-                )
+                deltas = score_delta(row["scores"], parent["scores"])
+                edge = {
+                    "kind": "mutated-from",
+                    "src": parent["id"],
+                    "dst": row["id"],
+                    "axis": row["axis"],
+                    "param_diff": param_diff(parent["params"], row["params"]),
+                    "score_delta": deltas,
+                }
+                # Derived verdict: did the child's structured prediction (§7.3) pan
+                # out? Present only when the child gave a structured `expected`.
+                prediction = build_prediction(row["expected"], parent["scores"], deltas)
+                if prediction:
+                    edge["prediction"] = prediction
+                edges.append(edge)
         for inspiration_name in row["inspired_by"]:
             inspiration = _resolve(inspiration_name, row["iteration"], rows)
             if inspiration is None:
@@ -179,6 +290,7 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
                     "parent": str(front.get("parent") or "").strip(),
                     "inspired_by": _split_names(front.get("inspired_by")),
                     "axis": str(front.get("axis") or ""),
+                    "expected": _parse_expected(front.get("expected")),
                 }
             )
         except (AttributeError, TypeError, ValueError) as exc:
@@ -240,4 +352,12 @@ def write_kg(run_dir: Path | str) -> Path:
     return path
 
 
-__all__ = ["param_diff", "score_delta", "build_kg", "write_kg", "KG_FILENAME", "KG_VERSION"]
+__all__ = [
+    "param_diff",
+    "score_delta",
+    "build_prediction",
+    "build_kg",
+    "write_kg",
+    "KG_FILENAME",
+    "KG_VERSION",
+]

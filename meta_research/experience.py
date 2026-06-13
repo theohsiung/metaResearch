@@ -567,7 +567,7 @@ def _render_hypothesis_md(
     parent = _scalar(hypothesis.get("parent"))
     change = _scalar(hypothesis.get("change"))
     inspired_by = _inspired_by_scalar(hypothesis.get("inspired_by"))
-    expected = _scalar(hypothesis.get("expected"))
+    expected = _expected_scalar(hypothesis.get("expected"))
     reasoning = str(hypothesis.get("reasoning") or "").strip()
 
     lines = [
@@ -590,6 +590,20 @@ def _render_hypothesis_md(
 
 def _scalar(value: Any) -> str:
     return "" if value is None else str(value)
+
+
+def _expected_scalar(value: Any) -> str:
+    """Render the ``expected`` prediction (schema 7.3) as a front-matter scalar.
+
+    The structured form is a dict ``{<objective>: {"direction": ..., "rel"?: ...}}``;
+    it is serialized to a compact JSON string (``sort_keys`` for deterministic
+    output) so ``kg.py`` can parse it back and compute a verdict (§7.6). Any other
+    value — a legacy free-text string or an absent prediction — falls through to the
+    plain scalar form and produces no verdict.
+    """
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    return _scalar(value)
 
 
 def _inspired_by_scalar(value: Any) -> str:

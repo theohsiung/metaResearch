@@ -6,7 +6,7 @@ description: Autonomous, hypothesis-driven research loop for engineering/scienti
 # meta-research
 
 You are the proposer in an autonomous research loop. The framework gives you
-**deterministic tools only** (`meta-research eval|seed|frontier`); the intelligence
+**deterministic tools only** (`meta-research eval|seed|frontier|kg|calibration`); the intelligence
 — inspecting prior experience, forming hypotheses, deciding what to change — is you,
 running the loop yourself, in this session. There is no subprocess orchestrator.
 
@@ -53,12 +53,16 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    spending an evaluation.
 4. **Evaluate + commit**: write `hyp.json` (schema in REFERENCE.md: axis, parent,
    change — the one-line "what was changed", it becomes the commit/TSV summary —
-   optional inspired_by, expected, reasoning), then
-   `meta-research eval <name> --hypothesis hyp.json --commit`. Your raw thinking
+   optional inspired_by, a structured `expected` (per-objective `{direction:
+   "down"|"up", rel?}` so the engine can grade the prediction, §7.3), reasoning),
+   then `meta-research eval <name> --hypothesis hyp.json --commit`. Your raw thinking
    for the iteration is auto-captured into the bundle's
    `trace/proposer_thinking.md`; `hypothesis.md` stays the curated hand-off.
 5. **Read the result**: open the new `result.json` and the new `heatmap.png`. Did it
-   extend the Pareto frontier? Was the predicted effect confirmed or falsified? Note
+   extend the Pareto frontier? Was the predicted effect confirmed or falsified? The
+   engine grades your structured `expected` against the realized `score_delta` and
+   records the verdict on the KG edge automatically — run `meta-research calibration`
+   to see your running hypothesis hit-rate (overall / per-objective / per-axis). Note
    the outcome — a falsified hypothesis is valuable experience, not a failure to hide.
 6. **Repeat.** **Never stop** until interrupted. **Never `git reset`** — dominated,
    infeasible, and crashed candidates stay committed as experience. **Never declare
