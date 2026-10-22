@@ -6,7 +6,30 @@ import argparse
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from meta_research import cli
+
+IDENTITY_ENV = ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL")
+
+
+@pytest.fixture(autouse=True)
+def isolated_git(tmp_path: Path, monkeypatch) -> None:
+    """No global git config; tests that need an identity provide one through the environment."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "no-global-gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for key in IDENTITY_ENV:
+        monkeypatch.setenv(key, "Test Runner" if key.endswith("NAME") else "test@example.com")
+
+
+def _clear_identity_env(monkeypatch) -> None:
+    for key in IDENTITY_ENV:
+        monkeypatch.delenv(key, raising=False)
+
+
+def _author(repo: Path) -> str:
+    return subprocess.run(["git", "log", "-1", "--format=%an <%ae>"], cwd=repo,
+                          capture_output=True, text=True, check=True).stdout.strip()
 
 
 def _init(tmp_path: Path, name: str, from_example: str | None = None) -> int:
@@ -82,3 +105,28 @@ def test_init_unknown_example_errors(tmp_path: Path) -> None:
 def test_init_refuses_existing_target(tmp_path: Path) -> None:
     (tmp_path / "exp4").mkdir()
     assert _init(tmp_path, "exp4") == 2
+
+
+def test_init_commits_as_the_enclosing_repo_identity(tmp_path: Path, monkeypatch) -> None:
+    _clear_identity_env(monkeypatch)
+    outer = tmp_path / "project"
+    outer.mkdir()
+    for args in (["init", "-q"], ["config", "user.name", "Owner"], ["config", "user.email", "owner@example.com"]):
+        subprocess.run(["git", *args], cwd=outer, check=True)
+    assert _init(outer, "exp5") == 0
+    assert _author(outer / "exp5") == "Owner <owner@example.com>"
+
+
+def test_init_uses_the_environment_identity(tmp_path: Path) -> None:
+    assert _init(tmp_path, "exp6") == 0
+    assert _author(tmp_path / "exp6") == "Test Runner <test@example.com>"
+
+
+def test_init_never_invents_an_identity(tmp_path: Path, monkeypatch, capsys) -> None:
+    _clear_identity_env(monkeypatch)
+    assert _init(tmp_path, "exp7") == 0
+    target = tmp_path / "exp7"
+    assert (target / ".git").is_dir() and not _has_commit(target)
+    local = subprocess.run(["git", "config", "--local", "user.email"], cwd=target, capture_output=True, text=True)
+    assert local.stdout.strip() == ""
+    assert "no git identity" in capsys.readouterr().out

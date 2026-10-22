@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -570,21 +571,29 @@ def _scaffold_stubs(target: Path, name: str) -> None:
 def _git_init_repo(target: Path, name: str) -> str:
     """`git init` the experiment + make the initial scaffold commit.
 
-    Ensures a usable identity *local to this repo* when none is configured, so the
-    append-only ledger works out of the box without touching global git config.
+    Commits as the user, never as an invented identity: the global config or
+    ``GIT_AUTHOR_*``/``GIT_COMMITTER_*`` when set, else the identity of the
+    repository the experiment is scaffolded inside (copied into this repo's local
+    config). With none of these, the commit is skipped and the status says why.
     Best-effort: returns a status string; never raises.
     """
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
+    def run(*args: str, cwd: Path = target) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["git", *args], cwd=str(target), capture_output=True, text=True, check=False
+            ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=False
         )
 
     if run("init", "-q").returncode != 0:
         return "git init failed"
-    # Only set a local identity if neither local nor global is configured.
-    if not run("config", "user.email").stdout.strip():
-        run("config", "user.email", "meta-research@localhost")
-        run("config", "user.name", "meta-research")
+    has_env = all(os.environ.get(k) for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL",
+                                                "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"))
+    if not has_env and not run("config", "user.email").stdout.strip():
+        enclosing = {key: run("config", key, cwd=target.parent).stdout.strip()
+                     for key in ("user.name", "user.email")}
+        if not all(enclosing.values()):
+            return ("git initialized, initial commit skipped: no git identity "
+                    "(set user.name and user.email, then commit)")
+        for key, value in enclosing.items():
+            run("config", key, value)
     run("add", "-A")
     commit = run("commit", "-q", "-m", f"meta-research: scaffold {name} experiment")
     if commit.returncode != 0:
