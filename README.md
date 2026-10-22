@@ -104,6 +104,7 @@ meta-research suggest [--seed N]                             # recommend an oper
 meta-research context --operator OP --parent ID              # list the bundles to read for that operator
 meta-research recall "<idea>"                                # earlier candidates that tried a similar idea, and how they went
 meta-research finalize --top K --pick <sealed key> --commit  # reveal sealed holdout scores of the top-K, pick one (logged)
+meta-research trajectory [--objective OBJ] [--ref LABEL=V]   # trajectory.png: every candidate over time with its lineage
 meta-research init <name>                                    # scaffold a new experiment dir
 ```
 
@@ -125,6 +126,7 @@ still decides what to try.
 | Stagnation: stop improving a parent whose last 3 children did not beat it | `suggest` | MLEvolve | Part of its evolution / cross-branch ablations |
 | Scoped experience per operator | `context` | AIRA-dojo | Design choice in the paper |
 | Retrospective memory: look up earlier attempts at an idea | `recall` | MLEvolve | Removing memory lowered its medal rate (small, noisy ablation) |
+| Search-trajectory plot: scores over time, parent→child lines (solid mutation, dashed crossover), reference levels, the hypotheses that moved the best score | `trajectory` | AIRA_2, Figure 7 | A diagnostic view, not an ablated mechanism |
 
 Studied but not adopted yet: OpenEvolve's cascade evaluation (cheap stages gate the
 expensive one), its MAP-Elites / island diversity archive, MLEvolve's pre-execution
@@ -169,6 +171,7 @@ meta-research/
     sealed.py               # sealed holdout scores: kept out of the ledger, revealed only by `finalize`
     suggest.py              # `suggest` (operator + parents) and `context` (bundles to read per operator)
     recall.py               # `recall`: BM25 over earlier hypotheses
+    trajectory.py           # `trajectory`: candidates over time with lineage edges (trajectory.png)
     cli.py                  # `meta-research eval|seed|frontier|kg|init`
     evaluators/
       __init__.py           # re-export the three adapters
@@ -228,7 +231,8 @@ The search mechanisms in [Search mechanisms borrowed from research-agent framewo
 come from:
 
 - [AIRA_2: Overcoming Bottlenecks in AI Research Agents](https://arxiv.org/abs/2603.26499) — hidden consistent
-  evaluation (the sealed holdout and `finalize`) and evolutionary parent selection with crossover (`suggest`).
+  evaluation (the sealed holdout and `finalize`), evolutionary parent selection with crossover (`suggest`), and
+  the search-history figure (Figure 7) that `trajectory` follows.
 - [AI Research Agents for Machine Learning: Search, Exploration, and Generalization in MLE-bench](https://arxiv.org/abs/2507.02554)
   ([facebookresearch/aira-dojo](https://github.com/facebookresearch/aira-dojo)) — the draft / improve / debug /
   crossover operators and per-operator scoped memory (`context`).

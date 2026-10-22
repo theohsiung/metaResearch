@@ -87,6 +87,7 @@ meta-research/
     sealed.py               # sealed holdout scores: split_sealed/store_sealed (runner), finalize() reveal (§6.6, §7.7)
     suggest.py              # operator + parent suggestion and per-operator context (§6.7)
     recall.py               # BM25 recall over bundle hypotheses: `meta-research recall "<query>"` (§6.7)
+    trajectory.py           # trajectory_data()/render_trajectory(): `meta-research trajectory` -> trajectory.png (§6.7)
     cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `calibration`, `finalize`, `init`
     evaluators/
       __init__.py           # re-export the three adapters

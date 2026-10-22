@@ -296,6 +296,13 @@ earlier candidates whose hypothesis matches (BM25 over name, axis, operator, cha
 reasoning) with their status, scores and prediction verdicts — so an idea that already
 failed is not tried again blindly (MLEvolve's retrospective memory).
 
+`meta-research trajectory [--objective OBJ] [--ref LABEL=VALUE ...]` draws
+`trajectory.png` (after AIRA_2's Figure 7): every candidate by iteration, lines from
+parent to child (solid for improve/debug, dashed for both parents of a crossover),
+points coloured by the frontier as it stands now, a best-so-far step line, reference
+levels, and the `change` line of each candidate that raised the best score or sits on
+the frontier. Read it to see which lineage is still moving and which ones stalled.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is

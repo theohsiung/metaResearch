@@ -367,6 +367,39 @@ def cmd_recall(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_trajectory(args: argparse.Namespace) -> int:
+    """`meta-research trajectory` — candidates over time with lineage edges (trajectory.png)."""
+    from .suggest import objectives_from_frontier
+    from .trajectory import TRAJECTORY_FILENAME, render_trajectory, trajectory_data
+
+    run_dir = Path(args.run_dir).resolve()
+    objectives = objectives_from_frontier(run_dir)
+    if not objectives:
+        _err(f"no frontier.json in {run_dir} — run `meta-research seed` first")
+        return 2
+    objective = next((o for o in objectives if o.name == (args.objective or objectives[0].name)), None)
+    if objective is None:
+        _err(f"unknown objective {args.objective!r}; known: {', '.join(o.name for o in objectives)}")
+        return 2
+    refs = {}
+    for item in args.ref or []:
+        label, _, value = item.partition("=")
+        try:
+            refs[label] = float(value)
+        except ValueError:
+            _err(f"--ref expects LABEL=NUMBER, got {item!r}")
+            return 2
+    data = trajectory_data(run_dir, objective, refs=refs)
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return 0
+    path = render_trajectory(data, Path(args.out) if args.out else run_dir / TRAJECTORY_FILENAME)
+    print(logfmt.bold(f"wrote {path}"))
+    print(logfmt.dim(f"  {len(data['points'])} candidates, {len(data['edges'])} lineage edges, "
+                     f"{len(data['annotations'])} annotated"))
+    return 0
+
+
 def cmd_kg(args: argparse.Namespace) -> int:
     """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
 
@@ -670,6 +703,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_rec.add_argument("--json", action="store_true")
     add_run_dir(p_rec)
     p_rec.set_defaults(func=cmd_recall)
+
+    p_traj = sub.add_parser("trajectory", help="plot candidates over time with lineage edges (trajectory.png)")
+    p_traj.add_argument("--objective", default=None, help="objective on the y axis (default: first)")
+    p_traj.add_argument("--ref", action="append", help="reference line LABEL=VALUE (repeatable)")
+    p_traj.add_argument("--out", default=None, help="output PNG (default: <run dir>/trajectory.png)")
+    p_traj.add_argument("--json", action="store_true", help="print the plotted data instead of drawing")
+    add_run_dir(p_traj)
+    p_traj.set_defaults(func=cmd_trajectory)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)
