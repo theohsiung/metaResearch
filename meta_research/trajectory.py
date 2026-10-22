@@ -115,6 +115,7 @@ def render_trajectory(data: dict[str, Any], out: Path | str) -> Path:
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.ticker import MaxNLocator
 
     out = Path(out)
     points = {p["id"]: p for p in data["points"]}
@@ -157,7 +158,8 @@ def render_trajectory(data: dict[str, Any], out: Path | str) -> Path:
         if any(e["style"] == style for e in data["edges"]):
             ax.plot([], [], label=style, linewidth=1.2, **spec)
     ax.set_xlabel("iteration")
-    arrow = "↑" if data["direction"] == "max" else "↓"
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # iterations are whole numbers
+    arrow ="↑" if data["direction"] == "max" else "↓"
     ax.set_ylabel(f"{data['objective']} ({arrow} better)")
     ax.set_title(f"Search trajectory — {data['objective']}")
     ax.legend(loc="best", fontsize=8, ncol=2)
