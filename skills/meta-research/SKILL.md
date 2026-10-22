@@ -1,6 +1,6 @@
 ---
 name: meta-research
-description: Autonomous, hypothesis-driven research loop for engineering/scientific design — it proposes parametric designs, scores each with a pluggable objective (an in-process numerical model, a loaded surrogate model, or a real-simulation API), reads the diagnostics (e.g. heatmaps) back, and maintains a multi-objective Pareto frontier over an append-only experience ledger (filesystem bundles, mirrored to git as the audit trail). Use this whenever the user wants to autonomously search or optimize a design or a set of parameters against a simulator/objective/surrogate — especially multi-objective trade-offs, "keep iterating overnight", or mechanism-level (not just parameter-tweak) design improvement — when they ask to "run meta-research", or when the working repo contains a prepare.py + designs/ experiment. This is design/parameter search, not ML model training.
+description: Autonomous, hypothesis-driven research loop for engineering/scientific design — it proposes parametric designs, scores each with a pluggable objective (an in-process numerical model, a loaded surrogate model, or a real-simulation API), reads the diagnostics (e.g. heatmaps) back, and maintains a multi-objective Pareto frontier over an append-only experience ledger (filesystem bundles, mirrored to git as the audit trail). Use this whenever the user wants to autonomously search or optimize a design or a set of parameters against a simulator/objective/surrogate — especially multi-objective trade-offs, "keep iterating overnight", or mechanism-level (not just parameter-tweak) design improvement — when they ask to "run meta-research", or when the working repo contains a prepare.py + designs/ experiment. The design may be a physical design or an ML training recipe scored by a fixed-budget training run; the loop is the same.
 ---
 
 # meta-research
@@ -68,6 +68,11 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    infeasible, and crashed candidates stay committed as experience. **Never declare
    the frontier "optimal"** or "good enough"; there is always another mechanism to try.
 
+**Choosing a final candidate.** If the evaluator scores a sealed holdout (it reports
+`sealed_stored` in the result metadata), pick the candidate to ship with
+`meta-research finalize --top k --pick <sealed key> --commit`, never by the search
+scores alone: the best search score is often a lucky one (REFERENCE.md §5b).
+
 ## Hard rules
 
 - **One mechanism per candidate.** Change a single mechanism so the result is
@@ -79,6 +84,9 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
   exploiting evaluator quirks, no fixtures tuned to one operating point.
 - **Append-only experience.** Every evaluated candidate is committed, whatever its
   status. The diagnostic traces are the data Meta-Harness depends on.
+- **Never read `.sealed/` or `finalize.jsonl` while searching.** Sealed holdout scores
+  exist so the search cannot fit them; looking at them turns the holdout into another
+  search split. Only `meta-research finalize` reads them, and every reveal is logged.
 - **Reasoning is a full record, not a summary.** hyp.json's `reasoning` is the
   permanent thinking trace: evidence read, EVERY option weighed and why it was
   rejected, the worked calculation, the falsifiable prediction. No length limit —

@@ -245,6 +245,31 @@ engine can grade.
 
 ---
 
+## 5b. Sealed holdout scores (hidden consistent evaluation)
+
+When the evaluator can score a candidate on two disjoint, **fixed** splits, the loop
+searches on one and chooses the final candidate on the other. This follows AIRA_2
+(arXiv:2603.26499): scoring the search on one fixed split and selecting on a
+never-searched split added 13–18 points over self-reported, re-split scores, and
+removed the late-run decline those scores show (noise and lucky splits get selected).
+AIRA-dojo (arXiv:2507.02554) measured the same gap from the other side: picking by
+test instead of validation scores inflated results by 9–17 points.
+
+- **Evaluator side.** Return the search-split scores as `result.scores` (they drive the
+  objectives, frontier, KG and `results.tsv`), and the holdout scores as
+  `result.metadata["sealed_scores"] = {name: float}`. Keep both splits fixed for the
+  whole campaign (same rows, same seeds), and do not write holdout details into the
+  trace directory.
+- **Runner side.** The runner removes `sealed_scores` before anything is recorded and
+  writes them to `.sealed/<bundle>.json`; the visible result only carries
+  `sealed_stored: <count>` (and `sealed_error` if values were dropped).
+- **Proposer side.** Never read `.sealed/` or `finalize.jsonl` during the search.
+- **Final choice.** `meta-research finalize --top k --by <search objective> --pick
+  <sealed key> [--direction max|min] [--commit]` reveals the sealed scores of the top-k
+  feasible candidates by the search objective and picks the best on the sealed key.
+  Every reveal is appended to `finalize.jsonl`; reveal as rarely as possible (ideally
+  once), since each look leaks a little of the holdout into your choices.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is

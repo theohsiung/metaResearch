@@ -274,6 +274,44 @@ def cmd_frontier(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_finalize(args: argparse.Namespace) -> int:
+    """`meta-research finalize` — reveal sealed holdout scores of the top-k and pick one.
+
+    The only command that reads ``.sealed/``; every reveal is appended to
+    ``finalize.jsonl`` (and committed with --commit), so the ledger shows when the
+    holdout was looked at.
+    """
+    from .sealed import finalize
+
+    run_dir = Path(args.run_dir).resolve()
+    try:
+        experiment = load_experiment(run_dir)
+        record = finalize(run_dir, list(experiment.OBJECTIVES), top=args.top, by=args.by,
+                          pick=args.pick, pick_direction=args.direction)
+    except (FileNotFoundError, ImportError, AttributeError, ValueError) as exc:
+        _err(str(exc))
+        return 2
+    print(logfmt.bold(f"top {record['top']} by {record['by']} (search); pick {record['pick']} "
+                      f"({record['pick_direction']}) on the sealed holdout"))
+    for cand in record["candidates"]:
+        sealed = cand["sealed"]
+        sealed_str = "  ".join(f"{k}={v:g}" for k, v in sorted(sealed.items())) if sealed else "(no sealed scores)"
+        mark = logfmt.green("* ") if cand["bundle"] == record["chosen"] else "  "
+        print(f"{mark}{cand['bundle']}: search {record['by']}={cand['search'].get(record['by']):g} | {sealed_str}")
+    if record["chosen"] is None:
+        _err(f"no revealed candidate has sealed key {record['pick']!r}")
+        return 1
+    print(logfmt.bold(f"chosen: {record['chosen']}"))
+    if args.commit:
+        from .experience import Experience
+
+        sha = Experience(run_dir, list(experiment.OBJECTIVES)).commit(
+            f"finalize: reveal sealed {record['pick']} of top {record['top']} by {record['by']} -> {record['chosen']}"
+        )
+        print(logfmt.dim(f"  committed {sha}"))
+    return 0
+
+
 def cmd_kg(args: argparse.Namespace) -> int:
     """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
 
@@ -542,6 +580,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_front = sub.add_parser("frontier", help="print the current Pareto frontier")
     add_run_dir(p_front)
     p_front.set_defaults(func=cmd_frontier)
+
+    p_fin = sub.add_parser(
+        "finalize", help="reveal sealed holdout scores of the top-k candidates and pick one (logged)"
+    )
+    p_fin.add_argument("--top", type=int, default=3, help="candidates to reveal (default 3)")
+    p_fin.add_argument("--by", default=None, help="search objective that ranks them (default: first)")
+    p_fin.add_argument("--pick", default=None, help="sealed key the choice optimizes (default: --by)")
+    p_fin.add_argument("--direction", choices=["max", "min"], default=None,
+                       help="direction for --pick (default: that objective's, else max)")
+    p_fin.add_argument("--commit", action="store_true", help="commit the reveal (append-only)")
+    add_run_dir(p_fin)
+    p_fin.set_defaults(func=cmd_finalize)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)

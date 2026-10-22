@@ -84,7 +84,8 @@ meta-research/
     kg.py                   # derived knowledge graph: build_kg(), write_kg() -> kg.json (§7.6)
     calibration.py          # derived hypothesis hit-rate: build_calibration() over kg edges (§7.6/§6.5)
     runner.py               # evaluate_and_record(): score one design -> bundle -> frontier -> kg -> results.tsv -> (opt) commit
-    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `calibration`, `init`
+    sealed.py               # sealed holdout scores: split_sealed/store_sealed (runner), finalize() reveal (§6.6, §7.7)
+    cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `calibration`, `finalize`, `init`
     evaluators/
       __init__.py           # re-export the three adapters
       numerical.py          # NumericalEvaluator: wrap a pure-python simulate() callable
@@ -281,6 +282,28 @@ from `./<DESIGNS_DIR>/`:
 > There is intentionally **no `run` subcommand that loops**. Looping = the agent in the
 > Claude Code session following the skill. The CLI only exposes deterministic steps.
 
+### 6.6 `sealed.py` — sealed holdout scores (hidden consistent evaluation)
+
+AIRA_2 (arXiv:2603.26499) showed that searching on one fixed split and choosing on a
+never-searched split beats self-reported, re-split scores by 13–18 points. `sealed.py`
+gives every experiment that discipline without touching the frozen interfaces:
+
+- An evaluator MAY return `result.metadata["sealed_scores"] = {name: float}` (holdout
+  scores); `result.scores` stay the search-split scores.
+- `runner._finalize` calls `split_sealed(result)` **before** classification and recording:
+  the sealed scores are removed from the result (so they never reach `result.json`,
+  `trace/breakdown.json`, `results.tsv`, `frontier.json` or `kg.json`), stored with
+  `store_sealed(run_dir, bundle_name, scores)` under `.sealed/<bundle>.json`, and the
+  visible metadata gets `sealed_stored: <count>` (plus `sealed_error` when non-finite or
+  non-numeric values were dropped, or the store failed). Never sinks the step.
+- `finalize(run_dir, objectives, *, top, by, pick, pick_direction)` ranks feasible,
+  non-crashed bundles by the search objective `by`, reveals the sealed scores of the
+  top `top`, chooses the best on the sealed key `pick`, and appends the record to
+  `finalize.jsonl`. It is the only reader of `.sealed/`; the skill forbids the proposer
+  from reading it.
+- CLI: `meta-research finalize [--top K] [--by OBJ] [--pick KEY] [--direction max|min]
+  [--commit]`.
+
 ## 7. Data schemas (PIN EXACTLY)
 
 ### 7.1 Experience bundle — `experience/<iter:03d>_<name>/`
@@ -462,6 +485,24 @@ Pinned semantics:
   `(dst, kind, src)`; rebuilds of the same ledger are byte-identical.
 - **Failure isolation**: a KG write failure attaches `kg_error` to
   `result.metadata` and never sinks the evaluation step.
+
+### 7.7 `.sealed/<bundle>.json` and `finalize.jsonl`
+
+```json
+{"bundle": "012_solid", "scores": {"acc_holdout": 0.877}}
+```
+
+One file per bundle that reported sealed scores, written once, never rewritten.
+`finalize.jsonl` is append-only, one reveal per line:
+
+```json
+{"top": 2, "by": "acc", "pick": "acc_holdout", "pick_direction": "max",
+ "candidates": [{"bundle": "011_lucky", "name": "lucky", "search": {"acc": 0.95},
+                 "sealed": {"acc_holdout": 0.61}},
+                {"bundle": "012_solid", "name": "solid", "search": {"acc": 0.93},
+                 "sealed": {"acc_holdout": 0.88}}],
+ "chosen": "012_solid"}
+```
 
 ## 8. Evaluator adapters (`meta_research/evaluators/`)
 

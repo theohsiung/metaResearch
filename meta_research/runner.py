@@ -34,6 +34,7 @@ from .frontier import classify, load_frontier, update_frontier
 from .interfaces import DesignSpec, EvalResult, Objective, replace
 from .kg import write_kg
 from .logfmt import ResultsLog
+from .sealed import split_sealed, store_sealed
 from .thinking import capture_thinking
 
 
@@ -258,6 +259,19 @@ def _finalize(
     tag: str | None,
 ) -> EvalResult:
     """Classify -> record -> frontier -> tsv -> (opt) commit. Shared tail for all paths."""
+    # 2b. Sealed holdout scores (meta_research.sealed): taken out of the result before
+    #     anything is recorded, so they never reach result.json, breakdown.json,
+    #     results.tsv, frontier.json or kg.json; stored under .sealed/ for `finalize`.
+    result, sealed, sealed_error = split_sealed(result)
+    if sealed:
+        try:
+            store_sealed(run_dir, experience.bundle_dir(iteration, name).name, sealed)
+            result = _attach_metadata(result, {"sealed_stored": len(sealed)})  # a count, not the keys
+        except Exception as exc:  # noqa: BLE001 — a store failure must not lose the result
+            sealed_error = f"{sealed_error + '; ' if sealed_error else ''}store failed: {exc!r}"
+    if sealed_error:
+        result = _attach_metadata(result, {"sealed_error": sealed_error})
+
     # 3. Resolve the status BEFORE recording, so the stored bundle (result.json +
     #    hypothesis.md) carries it. Classify against the frontier as it stands
     #    *before* this candidate: a candidate is "frontier" iff no existing frontier
