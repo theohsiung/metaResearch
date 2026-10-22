@@ -100,11 +100,36 @@ meta-research seed [--commit]                                # Phase 0: evaluate
 meta-research eval <design> --hypothesis hyp.json --commit   # score one design, store, frontier, kg, commit
 meta-research frontier                                       # print the current Pareto set + best per objective
 meta-research kg                                             # rebuild kg.json (derived knowledge graph) from the ledger
+meta-research suggest [--seed N]                             # recommend an operator + parent(s) from the ledger
+meta-research context --operator OP --parent ID              # list the bundles to read for that operator
+meta-research recall "<idea>"                                # earlier candidates that tried a similar idea, and how they went
+meta-research finalize --top K --pick <sealed key> --commit  # reveal sealed holdout scores of the top-K, pick one (logged)
 meta-research init <name>                                    # scaffold a new experiment dir
 ```
 
 There is intentionally **no `run` subcommand that loops**. Looping is the agent in the Claude
 Code session following the skill.
+
+## Search mechanisms borrowed from research-agent frameworks
+
+The loop also carries mechanisms from recent automated-research agents, chosen for
+domains where one evaluation is expensive and noisy (for example a fixed-budget
+training run scored on a benchmark suite). They stay deterministic tools: the agent
+still decides what to try.
+
+| Mechanism | Command | Source | Reported evidence |
+|---|---|---|---|
+| Sealed holdout: search on one fixed split, choose the final candidate on a never-searched one | `finalize` (evaluator returns `metadata["sealed_scores"]`) | AIRA_2's hidden consistent evaluation; AIRA-dojo's validation-vs-test selection results | AIRA_2: +13 to +18 points, and no late-run decline |
+| Operators: draft, improve, debug, crossover | `operator` in `hyp.json` | AIRA-dojo | Operator design named as the main bottleneck |
+| Parent selection by temperature-scaled rank (T=0.2), ~15% crossover across lineages | `suggest` | AIRA_2 | Removing evolution cost 8 to 11 points |
+| Stagnation: stop improving a parent whose last 3 children did not beat it | `suggest` | MLEvolve | Part of its evolution / cross-branch ablations |
+| Scoped experience per operator | `context` | AIRA-dojo | Design choice in the paper |
+| Retrospective memory: look up earlier attempts at an idea | `recall` | MLEvolve | Removing memory lowered its medal rate (small, noisy ablation) |
+
+Studied but not adopted yet: OpenEvolve's cascade evaluation (cheap stages gate the
+expensive one), its MAP-Elites / island diversity archive, MLEvolve's pre-execution
+review, and AIRA_2's asynchronous worker pool. The figures above come from the
+papers as summarized during a literature review, not from rerunning their experiments.
 
 ## Onboarding a new domain
 
@@ -141,6 +166,9 @@ meta-research/
     experience.py           # experience-bundle store + git APPEND-ONLY ledger
     kg.py                   # derived knowledge graph: build_kg()/write_kg() -> kg.json
     runner.py               # evaluate_and_record(): score -> bundle -> frontier -> kg -> tsv -> (opt) commit
+    sealed.py               # sealed holdout scores: kept out of the ledger, revealed only by `finalize`
+    suggest.py              # `suggest` (operator + parents) and `context` (bundles to read per operator)
+    recall.py               # `recall`: BM25 over earlier hypotheses
     cli.py                  # `meta-research eval|seed|frontier|kg|init`
     evaluators/
       __init__.py           # re-export the three adapters
@@ -195,3 +223,17 @@ This project stands on the shoulders of three prior works whose ideas it directl
   adapted to this project's tenets (never roll back — a falsified prediction is kept as experience).
 
 Huge thanks to the authors and contributors of all three projects.
+
+The search mechanisms in [Search mechanisms borrowed from research-agent frameworks](#search-mechanisms-borrowed-from-research-agent-frameworks)
+come from:
+
+- [AIRA_2: Overcoming Bottlenecks in AI Research Agents](https://arxiv.org/abs/2603.26499) — hidden consistent
+  evaluation (the sealed holdout and `finalize`) and evolutionary parent selection with crossover (`suggest`).
+- [AI Research Agents for Machine Learning: Search, Exploration, and Generalization in MLE-bench](https://arxiv.org/abs/2507.02554)
+  ([facebookresearch/aira-dojo](https://github.com/facebookresearch/aira-dojo)) — the draft / improve / debug /
+  crossover operators and per-operator scoped memory (`context`).
+- [MLEvolve: A Self-Evolving Framework for Automated Machine Learning Algorithm Discovery](https://arxiv.org/abs/2606.06473)
+  ([InternScience/MLEvolve](https://github.com/InternScience/MLEvolve)) — stagnation triggers (`suggest`) and
+  retrospective memory (`recall`).
+- [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) — studied for its cascade evaluation
+  and diversity archive; not adopted yet.
