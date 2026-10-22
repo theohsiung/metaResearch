@@ -270,6 +270,29 @@ test instead of validation scores inflated results by 9–17 points.
   Every reveal is appended to `finalize.jsonl`; reveal as rarely as possible (ideally
   once), since each look leaks a little of the holdout into your choices.
 
+## 5c. Operators, parent suggestions and scoped context
+
+Each candidate records an `operator` in `hyp.json` (stored in `hypothesis.md` and on
+its KG node): `draft` (a new design), `improve` (one parent), `debug` (fix a crashed
+candidate) or `crossover` (two parents from different lineages; name the second in
+`inspired_by`). Operator quality was the main bottleneck in AIRA-dojo
+(arXiv:2507.02554).
+
+`meta-research suggest [--seed N]` turns the ledger into one recommendation:
+
+- debug the latest candidate if it crashed (at most two debug attempts per chain);
+- otherwise pick a parent by temperature-scaled rank selection (T=0.2) over feasible
+  candidates ranked by Pareto layer, then the first objective (AIRA_2, arXiv:2603.26499);
+- crossover about 15% of the time, between different lineages; draft about 10%;
+- a parent whose last 3 children did not improve on it is stagnant and not offered for
+  improve (MLEvolve, arXiv:2606.06473).
+
+The result is deterministic for a given ledger and seed. Follow it, or say in the
+reasoning why you chose otherwise. `meta-research context --operator OP --parent ID`
+lists the bundles to read for that operator: the parent and its children for improve,
+the crash chain for debug, and the frontier plus recent candidates for draft and
+crossover.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is

@@ -43,7 +43,8 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    bundles are append-only files on disk, never rewritten (git is the audit/backup
    layer, not your query interface). Every hypothesis must cite bundles you
    actually read, never the KG alone. The diagnostic image tells you *where* the
-   design is failing — that is how the loop closes.
+   design is failing — that is how the loop closes. `meta-research suggest` and
+   `meta-research context` propose an operator, parents and bundles (REFERENCE.md §5c).
 2. **Form ONE falsifiable hypothesis** targeting a **mechanism**, not a parameter
    value (see REFERENCE.md mechanism axes). Name the failure mode the diagnostic
    revealed and the single mechanism you will change to fix it.

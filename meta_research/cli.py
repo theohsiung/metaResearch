@@ -312,6 +312,40 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_suggest(args: argparse.Namespace) -> int:
+    """`meta-research suggest` — recommend an operator and parent(s) from the ledger (deterministic)."""
+    from .suggest import suggest
+
+    run_dir = Path(args.run_dir).resolve()
+    rec = suggest(run_dir, seed=args.seed, temperature=args.temperature, crossover_rate=args.crossover_rate,
+                  draft_rate=args.draft_rate, stagnation=args.stagnation)
+    if args.json:
+        print(json.dumps(rec, indent=2, sort_keys=True))
+        return 0
+    parents = ", ".join(rec["parents"]) or "(none)"
+    print(logfmt.bold(f"suggested operator: {rec['operator']}   parents: {parents}"))
+    for fact in rec["facts"]:
+        print(f"  - {fact}")
+    print(logfmt.dim(f"  (seed {rec['seed']}; cite it in hyp.json, or state why you overrule it)"))
+    return 0
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    """`meta-research context` — the bundles to read for an operator (scoped experience)."""
+    from .suggest import context
+
+    run_dir = Path(args.run_dir).resolve()
+    try:
+        picks = context(run_dir, args.operator, args.parent or [])
+    except ValueError as exc:
+        _err(str(exc))
+        return 2
+    print(logfmt.bold(f"read for {args.operator}:"))
+    for bundle, why in picks:
+        print(f"  experience/{bundle}  — {why}")
+    return 0
+
+
 def cmd_kg(args: argparse.Namespace) -> int:
     """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
 
@@ -592,6 +626,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_fin.add_argument("--commit", action="store_true", help="commit the reveal (append-only)")
     add_run_dir(p_fin)
     p_fin.set_defaults(func=cmd_finalize)
+
+    p_sug = sub.add_parser("suggest", help="recommend an operator + parent(s) (rank selection, stagnation)")
+    p_sug.add_argument("--seed", type=int, default=0)
+    p_sug.add_argument("--temperature", type=float, default=0.2, help="rank-selection temperature")
+    p_sug.add_argument("--crossover-rate", type=float, default=0.15)
+    p_sug.add_argument("--draft-rate", type=float, default=0.1)
+    p_sug.add_argument("--stagnation", type=int, default=3, help="non-improving children that stall a parent")
+    p_sug.add_argument("--json", action="store_true")
+    add_run_dir(p_sug)
+    p_sug.set_defaults(func=cmd_suggest)
+
+    p_ctx = sub.add_parser("context", help="list the bundles to read for an operator")
+    p_ctx.add_argument("--operator", required=True, choices=["draft", "improve", "debug", "crossover"])
+    p_ctx.add_argument("--parent", action="append", help="parent bundle id (repeat for crossover)")
+    add_run_dir(p_ctx)
+    p_ctx.set_defaults(func=cmd_context)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)

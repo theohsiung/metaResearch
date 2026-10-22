@@ -206,16 +206,17 @@ def build_kg(run_dir: Path | str) -> dict[str, Any]:
     rows = _parse_bundles(experience_dir, warnings)
 
     for row in rows:
-        nodes.append(
-            {
-                "id": row["id"],
-                "iteration": row["iteration"],
-                "name": row["name"],
-                "status": row["status"],
-                "scores": row["scores"],
-                "bundle": f"{EXPERIENCE_DIRNAME}/{row['id']}",
-            }
-        )
+        node = {
+            "id": row["id"],
+            "iteration": row["iteration"],
+            "name": row["name"],
+            "status": row["status"],
+            "scores": row["scores"],
+            "bundle": f"{EXPERIENCE_DIRNAME}/{row['id']}",
+        }
+        if row["operator"]:  # draft | improve | debug | crossover (meta_research.suggest)
+            node["operator"] = row["operator"]
+        nodes.append(node)
         parent_name = row["parent"]
         if parent_name:
             parent = _resolve(parent_name, row["iteration"], rows)
@@ -290,6 +291,7 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
                     "parent": str(front.get("parent") or "").strip(),
                     "inspired_by": _split_names(front.get("inspired_by")),
                     "axis": str(front.get("axis") or ""),
+                    "operator": str(front.get("operator") or ""),
                     "expected": _parse_expected(front.get("expected")),
                 }
             )

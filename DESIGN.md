@@ -85,6 +85,7 @@ meta-research/
     calibration.py          # derived hypothesis hit-rate: build_calibration() over kg edges (§7.6/§6.5)
     runner.py               # evaluate_and_record(): score one design -> bundle -> frontier -> kg -> results.tsv -> (opt) commit
     sealed.py               # sealed holdout scores: split_sealed/store_sealed (runner), finalize() reveal (§6.6, §7.7)
+    suggest.py              # operator + parent suggestion and per-operator context (§6.7)
     cli.py                  # `meta-research eval <design> [--commit]`, `frontier`, `kg`, `calibration`, `finalize`, `init`
     evaluators/
       __init__.py           # re-export the three adapters
@@ -303,6 +304,17 @@ gives every experiment that discipline without touching the frozen interfaces:
   from reading it.
 - CLI: `meta-research finalize [--top K] [--by OBJ] [--pick KEY] [--direction max|min]
   [--commit]`.
+
+### 6.7 `suggest.py` — operators, parent suggestion, scoped context
+
+A deterministic read of the ledger (no `prepare.py` needed; objectives come from
+`frontier.json`). `suggest(run_dir, *, seed, temperature=0.2, crossover_rate=0.15,
+draft_rate=0.1, stagnation=3, max_debug=2)` returns `{"operator", "parents", "facts",
+"seed", ...}` (see SKILL REFERENCE §5c for the rules). `context(run_dir, operator,
+parents)` returns `(bundle_id, reason)` pairs. CLI: `meta-research suggest [--json]`,
+`meta-research context --operator OP [--parent ID ...]`. The `operator` field
+(`draft|improve|debug|crossover`) is an optional `hyp.json` key, rendered as a
+front-matter line after `axis` and copied onto the KG node when present.
 
 ## 7. Data schemas (PIN EXACTLY)
 

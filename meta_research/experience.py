@@ -564,6 +564,7 @@ def _render_hypothesis_md(
     heatmaps/results were inspected and what failure mode this design targets).
     """
     axis = _scalar(hypothesis.get("axis"))
+    operator = _scalar(hypothesis.get("operator"))
     parent = _scalar(hypothesis.get("parent"))
     change = _scalar(hypothesis.get("change"))
     inspired_by = _inspired_by_scalar(hypothesis.get("inspired_by"))
@@ -575,6 +576,7 @@ def _render_hypothesis_md(
         f"name: {_yaml_scalar(name)}",
         f"iteration: {int(iteration)}",
         f"axis: {_yaml_scalar(axis)}",
+        f"operator: {_yaml_scalar(operator)}",
         f"parent: {_yaml_scalar(parent)}",
         f"change: {_yaml_scalar(change)}",
         f"inspired_by: {_yaml_scalar(inspired_by)}",
