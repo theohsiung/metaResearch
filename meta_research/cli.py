@@ -346,6 +346,27 @@ def cmd_context(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_recall(args: argparse.Namespace) -> int:
+    """`meta-research recall "<query>"` — earlier candidates whose hypothesis matches the query."""
+    from .recall import recall
+
+    run_dir = Path(args.run_dir).resolve()
+    hits = recall(run_dir, args.query, k=args.k)
+    if args.json:
+        print(json.dumps(hits, indent=2, sort_keys=True))
+        return 0
+    if not hits:
+        print(logfmt.dim("no earlier candidate matches"))
+        return 0
+    for hit in hits:
+        scores = "  ".join(f"{k}={v:g}" for k, v in sorted(hit["scores"].items()))
+        verdicts = ", ".join(f"{k}:{v}" for k, v in sorted(hit["verdicts"].items()))
+        print(f"  experience/{hit['id']} [{hit['status']}] {scores}" + (f" | predictions {verdicts}" if verdicts else ""))
+        if hit["change"]:
+            print(logfmt.dim(f"      change: {hit['change']}"))
+    return 0
+
+
 def cmd_kg(args: argparse.Namespace) -> int:
     """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
 
@@ -642,6 +663,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_ctx.add_argument("--parent", action="append", help="parent bundle id (repeat for crossover)")
     add_run_dir(p_ctx)
     p_ctx.set_defaults(func=cmd_context)
+
+    p_rec = sub.add_parser("recall", help="find earlier candidates whose hypothesis matches a query (BM25)")
+    p_rec.add_argument("query")
+    p_rec.add_argument("-k", type=int, default=5)
+    p_rec.add_argument("--json", action="store_true")
+    add_run_dir(p_rec)
+    p_rec.set_defaults(func=cmd_recall)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)

@@ -291,7 +291,10 @@ The result is deterministic for a given ledger and seed. Follow it, or say in th
 reasoning why you chose otherwise. `meta-research context --operator OP --parent ID`
 lists the bundles to read for that operator: the parent and its children for improve,
 the crash chain for debug, and the frontier plus recent candidates for draft and
-crossover.
+crossover. Before proposing, `meta-research recall "<idea in a few words>"` finds
+earlier candidates whose hypothesis matches (BM25 over name, axis, operator, change and
+reasoning) with their status, scores and prediction verdicts — so an idea that already
+failed is not tried again blindly (MLEvolve's retrospective memory).
 
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
