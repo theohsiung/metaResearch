@@ -91,6 +91,7 @@ def finalize(
     by: str | None = None,
     pick: str | None = None,
     pick_direction: str | None = None,
+    weights: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Reveal the sealed scores of the top-``top`` candidates and pick one.
 
@@ -102,6 +103,9 @@ def finalize(
         pick: Sealed key the final choice maximizes/minimizes (default: ``by``).
         pick_direction: ``"max"``/``"min"`` for ``pick``; defaults to the direction of the
             objective of the same name, else ``"max"``.
+        weights: Rank by a weighted sum of search objectives instead of ``by``
+            (e.g. ``{"s": 0.6, "o": 0.4}``); each term is signed by its objective's
+            direction, so the sum is always maximized. ``pick`` is then required.
 
     Returns:
         The reveal record (also appended to ``finalize.jsonl``).
@@ -109,10 +113,30 @@ def finalize(
     run_dir = Path(run_dir)
     if top < 1:
         raise ValueError("top must be >= 1")
-    by_obj = next((o for o in objectives if o.name == (by or objectives[0].name)), None)
-    if by_obj is None:
-        raise ValueError(f"unknown search objective {by!r}")
-    pick = pick or by_obj.name
+    if weights:
+        directions = {o.name: o.direction for o in objectives}
+        unknown = sorted(set(weights) - set(directions))
+        if unknown:
+            raise ValueError(f"unknown search objective(s) in weights: {unknown}")
+        if not pick:
+            raise ValueError("pick is required with weights")
+        rank_names = sorted(weights)
+
+        def rank_key(scores: dict[str, float]) -> float:
+            return sum(weights[n] * scores[n] * (1 if directions[n] == "max" else -1) for n in rank_names)
+
+        by_label, descending = "weighted", True
+    else:
+        by_obj = next((o for o in objectives if o.name == (by or objectives[0].name)), None)
+        if by_obj is None:
+            raise ValueError(f"unknown search objective {by!r}")
+        rank_names = [by_obj.name]
+
+        def rank_key(scores: dict[str, float]) -> float:
+            return scores[by_obj.name]
+
+        by_label, descending = by_obj.name, by_obj.direction == "max"
+    pick = pick or by_label
     if pick_direction is None:
         pick_direction = next((o.direction for o in objectives if o.name == pick), "max")
     if pick_direction not in ("max", "min"):
@@ -123,9 +147,9 @@ def finalize(
     for child in sorted(experience.iterdir()) if experience.is_dir() else []:
         row = _read_bundle_row(child) if child.is_dir() else None
         if (row and row["feasible"] and not row.get("error") and row.get("status") != "crash"
-                and by_obj.name in row["scores"]):
+                and all(n in row["scores"] for n in rank_names)):
             rows.append({**row, "bundle": child.name})
-    rows.sort(key=lambda r: r["scores"][by_obj.name], reverse=by_obj.direction == "max")
+    rows.sort(key=lambda r: rank_key(r["scores"]), reverse=descending)
     revealed = [{"bundle": r["bundle"], "name": r["name"], "search": r["scores"],
                  "sealed": _load_sealed(run_dir, r["bundle"])} for r in rows[:top]]
     scored = [c for c in revealed if c["sealed"] and pick in c["sealed"]]
@@ -133,8 +157,10 @@ def finalize(
     if scored:
         best = (max if pick_direction == "max" else min)(scored, key=lambda c: c["sealed"][pick])
         chosen = best["bundle"]
-    record = {"top": top, "by": by_obj.name, "pick": pick, "pick_direction": pick_direction,
+    record = {"top": top, "by": by_label, "pick": pick, "pick_direction": pick_direction,
               "candidates": revealed, "chosen": chosen}
+    if weights:
+        record["weights"] = dict(weights)
     with (run_dir / FINALIZE_LOG).open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, sort_keys=True) + "\n")
     return record

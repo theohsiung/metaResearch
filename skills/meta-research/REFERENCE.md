@@ -267,6 +267,9 @@ test instead of validation scores inflated results by 9–17 points.
 - **Final choice.** `meta-research finalize --top k --by <search objective> --pick
   <sealed key> [--direction max|min] [--commit]` reveals the sealed scores of the top-k
   feasible candidates by the search objective and picks the best on the sealed key.
+  With several objectives whose real target is a fixed mix (e.g. a leaderboard's
+  0.6 x A + 0.4 x B), rank by that mix instead: `--weights a=0.6,b=0.4` (each term
+  signed by its objective's direction; `--pick` required).
   Every reveal is appended to `finalize.jsonl`; reveal as rarely as possible (ideally
   once), since each look leaks a little of the holdout into your choices.
 

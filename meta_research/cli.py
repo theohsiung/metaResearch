@@ -287,8 +287,16 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     run_dir = Path(args.run_dir).resolve()
     try:
         experiment = load_experiment(run_dir)
+        weights = None
+        if getattr(args, "weights", None):
+            weights = {}
+            for part in args.weights.split(","):
+                name, sep, value = part.strip().partition("=")
+                if not sep:
+                    raise ValueError(f"--weights expects name=weight pairs, got {part!r}")
+                weights[name.strip()] = float(value)
         record = finalize(run_dir, list(experiment.OBJECTIVES), top=args.top, by=args.by,
-                          pick=args.pick, pick_direction=args.direction)
+                          pick=args.pick, pick_direction=args.direction, weights=weights)
     except (FileNotFoundError, ImportError, AttributeError, ValueError) as exc:
         _err(str(exc))
         return 2
@@ -298,7 +306,9 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         sealed = cand["sealed"]
         sealed_str = "  ".join(f"{k}={v:g}" for k, v in sorted(sealed.items())) if sealed else "(no sealed scores)"
         mark = logfmt.green("* ") if cand["bundle"] == record["chosen"] else "  "
-        print(f"{mark}{cand['bundle']}: search {record['by']}={cand['search'].get(record['by']):g} | {sealed_str}")
+        shown = record.get("weights") or {record["by"]: None}
+        search_str = "  ".join(f"{k}={cand['search'][k]:g}" for k in sorted(shown))
+        print(f"{mark}{cand['bundle']}: search {search_str} | {sealed_str}")
     if record["chosen"] is None:
         _err(f"no revealed candidate has sealed key {record['pick']!r}")
         return 1
@@ -684,6 +694,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_fin.add_argument("--top", type=int, default=3, help="candidates to reveal (default 3)")
     p_fin.add_argument("--by", default=None, help="search objective that ranks them (default: first)")
     p_fin.add_argument("--pick", default=None, help="sealed key the choice optimizes (default: --by)")
+    p_fin.add_argument("--weights", default=None,
+                       help="rank by a weighted sum instead of --by, e.g. 's=0.6,o=0.4' (needs --pick)")
     p_fin.add_argument("--direction", choices=["max", "min"], default=None,
                        help="direction for --pick (default: that objective's, else max)")
     p_fin.add_argument("--commit", action="store_true", help="commit the reveal (append-only)")

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from meta_research.cli import main as cli_main
-from meta_research.interfaces import EvalResult
+from meta_research.interfaces import EvalResult, Objective
 from meta_research.runner import evaluate_and_record
 from meta_research.sealed import finalize, split_sealed
 
@@ -143,6 +143,23 @@ def test_finalize_picks_on_the_holdout_and_logs_every_reveal(run_dir):
     finalize(run, experiment.OBJECTIVES, top=3, pick="acc_holdout")
     lines = (run / "finalize.jsonl").read_text().splitlines()
     assert len(lines) == 2 and json.loads(lines[1])["top"] == 3
+
+
+def test_finalize_ranks_by_a_signed_weighted_sum(run_dir):
+    experiment, run = run_dir
+    _evaluate_all(experiment, run)
+    record = finalize(run, experiment.OBJECTIVES, top=2, weights={"acc": 0.5}, pick="acc_holdout")
+    assert record["by"] == "weighted" and record["weights"] == {"acc": 0.5}
+    assert [c["bundle"] for c in record["candidates"]] == ["000_lucky", "001_solid"]
+    lower_is_better = [Objective("acc", direction="min")]
+    record = finalize(run, lower_is_better, top=2, weights={"acc": 1.0}, pick="acc_holdout")
+    assert [c["bundle"] for c in record["candidates"]] == ["003_messy", "002_weak"]
+    with pytest.raises(ValueError, match="unknown"):
+        finalize(run, experiment.OBJECTIVES, weights={"cost": 1.0}, pick="acc_holdout")
+    with pytest.raises(ValueError, match="pick"):
+        finalize(run, experiment.OBJECTIVES, weights={"acc": 1.0})
+    assert cli_main(["finalize", "--top", "2", "--weights", "acc=0.6", "--pick", "acc_holdout"]) == 0
+    assert cli_main(["finalize", "--weights", "acc", "--pick", "acc_holdout"]) == 2
 
 
 def test_finalize_cli_reports_and_commits(run_dir, capsys):

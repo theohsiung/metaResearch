@@ -304,8 +304,9 @@ gives every experiment that discipline without touching the frozen interfaces:
   top `top`, chooses the best on the sealed key `pick`, and appends the record to
   `finalize.jsonl`. It is the only reader of `.sealed/`; the skill forbids the proposer
   from reading it.
-- CLI: `meta-research finalize [--top K] [--by OBJ] [--pick KEY] [--direction max|min]
-  [--commit]`.
+- CLI: `meta-research finalize [--top K] [--by OBJ | --weights OBJ=W,...] [--pick KEY]
+  [--direction max|min] [--commit]`. `--weights` ranks by a direction-signed weighted sum
+  of search objectives, for targets that are a fixed mix of them.
 
 ### 6.7 `suggest.py` — operators, parent suggestion, scoped context
 
