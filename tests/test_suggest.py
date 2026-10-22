@@ -164,3 +164,16 @@ def test_context_scopes_the_experience(lab, capsys):
     assert "Pareto frontier member" in capsys.readouterr().out
     assert cli_main(["suggest", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["operator"] == "debug"
+
+
+def test_reference_points_rank_but_never_parent(lab):
+    run, add = lab
+    ref = add("reference", {"acc": 0.99, "cost": 0.1})  # dominates everything, but is a reference point
+    a = add("a", {"acc": 0.8, "cost": 1.0})
+    for seed in range(20):
+        rec = suggest(run, seed=seed, draft_rate=0.0, crossover_rate=0.0, references=["reference"])
+        assert rec["parents"] == [a]
+    assert any("never parents" in f and ref in f for f in rec["facts"])
+    only_refs = suggest(run, seed=0, draft_rate=0.0, references=["reference", "a"])
+    assert only_refs["operator"] == "draft" and only_refs["parents"] == []
+    assert suggest(run, seed=0, draft_rate=0.0, crossover_rate=0.0)["parents"] == [ref]  # no list: unchanged

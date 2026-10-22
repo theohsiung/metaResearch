@@ -312,9 +312,11 @@ gives every experiment that discipline without touching the frozen interfaces:
 
 A deterministic read of the ledger (no `prepare.py` needed; objectives come from
 `frontier.json`). `suggest(run_dir, *, seed, temperature=0.2, crossover_rate=0.15,
-draft_rate=0.1, stagnation=3, max_debug=2)` returns `{"operator", "parents", "facts",
+draft_rate=0.1, stagnation=3, max_debug=2, references=())` returns `{"operator", "parents", "facts",
 "seed", ...}` (see SKILL REFERENCE §5c for the rules). `context(run_dir, operator,
-parents)` returns `(bundle_id, reason)` pairs. CLI: `meta-research suggest [--json]`,
+parents)` returns `(bundle_id, reason)` pairs. `references` (the CLI reads `prepare.py`'s optional
+`REFERENCE_POINTS`) are design names ranked as usual but never suggested as parents.
+CLI: `meta-research suggest [--json]`,
 `meta-research context --operator OP [--parent ID ...]`. The `operator` field
 (`draft|improve|debug|crossover`) is an optional `hyp.json` key, rendered as a
 front-matter line after `axis` and copied onto the KG node when present.

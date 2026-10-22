@@ -288,7 +288,10 @@ candidate) or `crossover` (two parents from different lineages; name the second 
   candidates ranked by Pareto layer, then the first objective (AIRA_2, arXiv:2603.26499);
 - crossover about 15% of the time, between different lineages; draft about 10%;
 - a parent whose last 3 children did not improve on it is stagnant and not offered for
-  improve (MLEvolve, arXiv:2606.06473).
+  improve (MLEvolve, arXiv:2606.06473);
+- designs named in `prepare.py`'s optional `REFERENCE_POINTS` list (e.g. an untrained
+  model, or one built outside the space the search may change) keep their Pareto rank
+  but are never offered as parents.
 
 The result is deterministic for a given ledger and seed. Follow it, or say in the
 reasoning why you chose otherwise. `meta-research context --operator OP --parent ID`

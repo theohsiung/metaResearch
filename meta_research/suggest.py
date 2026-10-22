@@ -137,8 +137,13 @@ def suggest(
     draft_rate: float = 0.1,
     stagnation: int = 3,
     max_debug: int = 2,
+    references: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """One recommendation ``{"operator", "parents", "facts", ...}`` from the ledger."""
+    """One recommendation ``{"operator", "parents", "facts", ...}`` from the ledger.
+
+    ``references``: design names that are reference points (e.g. an untrained model, or one built
+    outside the space the search may change): they keep their place in the Pareto layering, so they
+    still dominate what they beat, but are never suggested as parents."""
     rows = load_rows(run_dir)
     objectives = objectives or objectives_from_frontier(run_dir)
     rng = random.Random(f"{seed}:{len(rows)}")
@@ -160,6 +165,13 @@ def suggest(
     if not ranked:
         facts.append("no feasible candidate yet: draft a new design")
         return out
+    skipped = [r["id"] for r in ranked if r["name"] in set(references)]
+    if skipped:
+        ranked = [r for r in ranked if r["name"] not in set(references)]
+        facts.append(f"reference points, never parents: {', '.join(skipped)}")
+        if not ranked:
+            facts.append("only reference points are feasible: draft a new design")
+            return out
     stalled = {r["id"]: stagnant_run(r, rows, objectives) for r in ranked}
     open_ = [r for r in ranked if stalled[r["id"]] < stagnation]
     for r in ranked:

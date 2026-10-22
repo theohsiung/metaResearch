@@ -328,8 +328,12 @@ def cmd_suggest(args: argparse.Namespace) -> int:
     from .suggest import suggest
 
     run_dir = Path(args.run_dir).resolve()
+    try:
+        references = list(getattr(load_experiment(run_dir), "REFERENCE_POINTS", []))
+    except (FileNotFoundError, ImportError, AttributeError, SyntaxError):
+        references = []  # suggest works from the ledger alone; prepare.py only adds the reference list
     rec = suggest(run_dir, seed=args.seed, temperature=args.temperature, crossover_rate=args.crossover_rate,
-                  draft_rate=args.draft_rate, stagnation=args.stagnation)
+                  draft_rate=args.draft_rate, stagnation=args.stagnation, references=references)
     if args.json:
         print(json.dumps(rec, indent=2, sort_keys=True))
         return 0
