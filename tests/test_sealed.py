@@ -162,6 +162,13 @@ def test_finalize_ranks_by_a_signed_weighted_sum(run_dir):
     assert cli_main(["finalize", "--weights", "acc", "--pick", "acc_holdout"]) == 2
 
 
+def test_finalize_never_picks_a_reference_point(run_dir):
+    experiment, run = run_dir
+    _evaluate_all(experiment, run)
+    record = finalize(run, experiment.OBJECTIVES, top=2, by="acc", pick="acc_holdout", exclude=["lucky"])
+    assert [c["bundle"] for c in record["candidates"]] == ["001_solid", "002_weak"]
+
+
 def test_finalize_cli_reports_and_commits(run_dir, capsys):
     experiment, run = run_dir
     _evaluate_all(experiment, run)

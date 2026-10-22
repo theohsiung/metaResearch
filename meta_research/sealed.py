@@ -92,6 +92,7 @@ def finalize(
     pick: str | None = None,
     pick_direction: str | None = None,
     weights: dict[str, float] | None = None,
+    exclude: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Reveal the sealed scores of the top-``top`` candidates and pick one.
 
@@ -106,6 +107,7 @@ def finalize(
         weights: Rank by a weighted sum of search objectives instead of ``by``
             (e.g. ``{"s": 0.6, "o": 0.4}``); each term is signed by its objective's
             direction, so the sum is always maximized. ``pick`` is then required.
+        exclude: Design names that cannot be the final pick (reference points).
 
     Returns:
         The reveal record (also appended to ``finalize.jsonl``).
@@ -147,7 +149,7 @@ def finalize(
     for child in sorted(experience.iterdir()) if experience.is_dir() else []:
         row = _read_bundle_row(child) if child.is_dir() else None
         if (row and row["feasible"] and not row.get("error") and row.get("status") != "crash"
-                and all(n in row["scores"] for n in rank_names)):
+                and all(n in row["scores"] for n in rank_names) and row["name"] not in set(exclude)):
             rows.append({**row, "bundle": child.name})
     rows.sort(key=lambda r: rank_key(r["scores"]), reverse=descending)
     revealed = [{"bundle": r["bundle"], "name": r["name"], "search": r["scores"],

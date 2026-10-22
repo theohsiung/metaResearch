@@ -291,7 +291,7 @@ candidate) or `crossover` (two parents from different lineages; name the second 
   improve (MLEvolve, arXiv:2606.06473);
 - designs named in `prepare.py`'s optional `REFERENCE_POINTS` list (e.g. an untrained
   model, or one built outside the space the search may change) keep their Pareto rank
-  but are never offered as parents.
+  but are never offered as parents, nor picked by `finalize`.
 
 The result is deterministic for a given ledger and seed. Follow it, or say in the
 reasoning why you chose otherwise. `meta-research context --operator OP --parent ID`

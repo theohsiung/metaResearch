@@ -296,7 +296,8 @@ def cmd_finalize(args: argparse.Namespace) -> int:
                     raise ValueError(f"--weights expects name=weight pairs, got {part!r}")
                 weights[name.strip()] = float(value)
         record = finalize(run_dir, list(experiment.OBJECTIVES), top=args.top, by=args.by,
-                          pick=args.pick, pick_direction=args.direction, weights=weights)
+                          pick=args.pick, pick_direction=args.direction, weights=weights,
+                          exclude=list(getattr(experiment, "REFERENCE_POINTS", [])))
     except (FileNotFoundError, ImportError, AttributeError, ValueError) as exc:
         _err(str(exc))
         return 2
