@@ -146,6 +146,12 @@ def test_reality_outcomes_sync_and_concordance(lab, capsys):  # noqa: F811
     assert untested not in real
     weighted = outcomes(board, weights={"acc": 0.5, "cost": 0.5})  # cost is minimized: 5 -> 4 is a gain
     assert weighted[bad]["gain"] == pytest.approx(0.5 * -0.025 + 0.5 * 0.2)
+    base_id = real[good]["parent"]
+    rescored = {base_id: {"pooled": 50.0}, real[good]["bundle"]: {"pooled": 49.0}, bb: {"pooled": 51.0}}
+    flipped = outcomes(board, scores=rescored)  # a later, consistent metric reverses the order
+    assert flipped[good]["gain"] == pytest.approx(-0.02) and flipped[bad]["gain"] == pytest.approx(0.02)
+    with pytest.raises(BoardError):
+        outcomes(board, scores={base_id: {"x": 1.0}, bb: {"y": 2.0}})  # no shared name: say which
     conc = concordance(board)
     assert conc == {"agree": 0, "n": 1, "rate": 0.0, "by_format": {"single": {"agree": 0, "n": 1}}}
     added = sync(board)

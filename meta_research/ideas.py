@@ -308,7 +308,8 @@ def schedule(board: Board, *, n: int = 4, top_fraction: float = 0.25,
 # --------------------------------------------------------------------------- #
 # reality: outcomes of evaluated ideas
 # --------------------------------------------------------------------------- #
-def outcomes(board: Board, *, weights: dict[str, float] | None = None) -> dict[str, dict[str, Any]]:
+def outcomes(board: Board, *, weights: dict[str, float] | None = None,
+             scores: dict[str, dict[str, float]] | None = None) -> dict[str, dict[str, Any]]:
     """Realized outcome of every idea with an evaluated bundle.
 
     A bundle tests an idea when its ``hypothesis.md`` front-matter names it (``idea`` in hyp.json)
@@ -316,13 +317,25 @@ def outcomes(board: Board, *, weights: dict[str, float] | None = None) -> dict[s
     (``weights`` maps objective -> weight, default the first objective in ``frontier.json``),
     signed so that positive is better. An infeasible or crashed bundle (including an early-stopped
     run) failed. An idea keeps its best bundle.
+
+    ``scores`` overrides the ledger's scores per bundle id (``{bundle: {name: value}}``), for a run
+    whose metric changed after some bundles were recorded: the ledger stays append-only and the
+    rescored values live beside it. A name only in ``scores`` is maximized; with ``scores`` and no
+    ``weights``, the name its entries share is used.
     """
     from .suggest import _parent_of, load_rows, objectives_from_frontier
 
     objectives = {o.name: o for o in objectives_from_frontier(board.run_dir)}
+    if not weights and scores:
+        shared = set.intersection(*(set(v) for v in scores.values())) if scores else set()
+        if len(shared) != 1:
+            raise BoardError("with --scores, name the objective(s) to use with --weights")
+        weights = {shared.pop(): 1.0}
     if not weights:
         weights = {next(iter(objectives)): 1.0} if objectives else {}
     rows = load_rows(board.run_dir)
+    if scores:
+        rows = [{**r, "scores": {**r["scores"], **scores.get(r["id"], {})}} for r in rows]
     by_id = {r["id"]: r for r in rows}
     tested: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
@@ -370,12 +383,13 @@ def _realized_order(x: dict[str, Any], y: dict[str, Any], deadband: float) -> in
     return 1 if x["gain"] > y["gain"] else -1
 
 
-def sync(board: Board, *, weights: dict[str, float] | None = None, deadband: float = 0.002) -> list[dict[str, Any]]:
+def sync(board: Board, *, weights: dict[str, float] | None = None, deadband: float = 0.002,
+         scores: dict[str, dict[str, float]] | None = None) -> list[dict[str, Any]]:
     """Play one reality match per pair of tested ideas whose outcomes differ by more than ``deadband``.
 
     Idempotent: a pair that already has a reality match is not replayed (its first outcome stands).
     """
-    real = outcomes(board, weights=weights)
+    real = outcomes(board, weights=weights, scores=scores)
     played = {tuple(sorted((m["a"], m["b"]))) for m in board.matches() if m["format"] == "reality"}
     added = []
     ids = sorted(real)
@@ -398,10 +412,10 @@ def _describe(outcome: dict[str, Any]) -> str:
     return f"{outcome['bundle']} gain {outcome['gain']:+.4f}"
 
 
-def concordance(board: Board, *, weights: dict[str, float] | None = None,
-                deadband: float = 0.002) -> dict[str, Any]:
+def concordance(board: Board, *, weights: dict[str, float] | None = None, deadband: float = 0.002,
+                scores: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
     """How often a judged match picked the idea that later did better (both tested, outcomes apart)."""
-    real = outcomes(board, weights=weights)
+    real = outcomes(board, weights=weights, scores=scores)
     per_format: dict[str, list[int]] = {}
     for m in board.matches():
         if m["format"] == "reality" or m["a"] not in real or m["b"] not in real:
@@ -420,9 +434,10 @@ def concordance(board: Board, *, weights: dict[str, float] | None = None,
 # --------------------------------------------------------------------------- #
 # reports
 # --------------------------------------------------------------------------- #
-def rank(board: Board, *, weights: dict[str, float] | None = None) -> list[dict[str, Any]]:
+def rank(board: Board, *, weights: dict[str, float] | None = None,
+         scores: dict[str, dict[str, float]] | None = None) -> list[dict[str, Any]]:
     """Every idea with rating, record, status and realized gain, best rating first."""
-    real = outcomes(board, weights=weights)
+    real = outcomes(board, weights=weights, scores=scores)
     ratings = elo(board)
     rows = []
     for i, idea in board.ideas.items():
@@ -436,9 +451,10 @@ def rank(board: Board, *, weights: dict[str, float] | None = None) -> list[dict[
     return rows
 
 
-def stats(board: Board, *, weights: dict[str, float] | None = None, deadband: float = 0.002) -> dict[str, Any]:
+def stats(board: Board, *, weights: dict[str, float] | None = None, deadband: float = 0.002,
+          scores: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
     """The Supervisor's view: what each generation method yields, in rating and in reality."""
-    rows = rank(board, weights=weights)
+    rows = rank(board, weights=weights, scores=scores)
     groups: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         groups.setdefault(row["origin"], []).append(row)
@@ -455,7 +471,7 @@ def stats(board: Board, *, weights: dict[str, float] | None = None, deadband: fl
             "matches": dict(sorted(Counter(m["format"] for m in board.matches()).items())),
             "reviews": dict(sorted(Counter(f"{r['kind']}:{r['verdict']}" for r in board.reviews()).items())),
             "by_method": by_method,
-            "concordance": concordance(board, weights=weights, deadband=deadband)}
+            "concordance": concordance(board, weights=weights, deadband=deadband, scores=scores)}
 
 
 def search_cards(board: Board, query: str, *, k: int = 10) -> list[dict[str, Any]]:

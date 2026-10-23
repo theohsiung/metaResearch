@@ -422,6 +422,14 @@ def cmd_ideas(args: argparse.Namespace) -> int:
     board = ib.Board(Path(args.run_dir).resolve())
     try:
         weights = _weights(getattr(args, "weights", None))
+        rescored = None
+        if getattr(args, "rescored", None):  # {bundle: {name: value, ...}}; non-numeric fields are notes
+            path = Path(args.rescored)
+            if not path.is_absolute() and not path.exists():
+                path = Path(args.run_dir) / path  # a file kept beside the ledger
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            rescored = {b: {k: float(v) for k, v in vals.items() if isinstance(v, (int, float))}
+                        for b, vals in doc.items()}
         action = args.action
         if action == "card":
             e = board.add_card(**_fields(args, ("title", "source", "technique", "claim", "conditions", "cost", "tags")))
@@ -445,7 +453,7 @@ def cmd_ideas(args: argparse.Namespace) -> int:
             board.add_review(args.idea, **fields)
             print(f"{args.idea}: {fields['kind']} review -> {fields['verdict']}")
         elif action == "schedule":
-            tested = set(ib.outcomes(board, weights=weights))
+            tested = set(ib.outcomes(board, weights=weights, scores=rescored))
             plan = ib.schedule(board, n=args.n, top_fraction=args.top_fraction, tested=tested)
             if args.json:
                 print(json.dumps(plan, indent=2))
@@ -460,7 +468,7 @@ def cmd_ideas(args: argparse.Namespace) -> int:
             r = ib.elo(board)
             print(f"{args.a} {r[args.a]['elo']:.0f}  {args.b} {r[args.b]['elo']:.0f}")
         elif action == "rank":
-            rows = ib.rank(board, weights=weights)
+            rows = ib.rank(board, weights=weights, scores=rescored)
             if args.json:
                 print(json.dumps(rows, indent=2))
                 return 0
@@ -481,13 +489,13 @@ def cmd_ideas(args: argparse.Namespace) -> int:
             board.link(args.idea, args.bundle)
             print(f"{args.idea} <- experience/{args.bundle}")
         elif action == "sync":
-            added = ib.sync(board, weights=weights, deadband=args.deadband)
+            added = ib.sync(board, weights=weights, deadband=args.deadband, scores=rescored)
             for m in added:
                 loser = m["b"] if m["winner"] == m["a"] else m["a"]
                 print(f"  reality: {m['winner']} beat {loser} ({m['rationale']})")
             print(logfmt.dim(f"  {len(added)} reality match(es) played"))
         elif action == "stats":
-            print(json.dumps(ib.stats(board, weights=weights, deadband=args.deadband), indent=2))
+            print(json.dumps(ib.stats(board, weights=weights, deadband=args.deadband, scores=rescored), indent=2))
         elif action == "digest":
             print(ib.digest(board, last=args.last))
         elif action == "metareview":
@@ -881,6 +889,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-n", type=int, default=4)
     p.add_argument("--top-fraction", type=float, default=0.25, help="share of top ideas whose matches are debates")
     p.add_argument("--weights", help="objective weights for realized gains, e.g. 's=0.6,o=0.4'")
+    p.add_argument("--rescored", help="JSON {bundle: {name: value}} overriding ledger scores (a changed metric)")
     p.add_argument("--json", action="store_true")
     p = act("match", "record a judged match and update Elo")
     p.add_argument("a")
@@ -890,6 +899,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rationale")
     p = act("rank", "ideas by Elo with status and realized gain")
     p.add_argument("--weights")
+    p.add_argument("--rescored")
     p.add_argument("--json", action="store_true")
     p = act("proximity", "similarity clusters and near-duplicates")
     p.add_argument("--threshold", type=float, default=0.3)
@@ -900,9 +910,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("bundle", help="experience/ bundle id, e.g. 012_d1_same_skill_data")
     p = act("sync", "play reality matches between tested ideas from their realized gains")
     p.add_argument("--weights")
+    p.add_argument("--rescored")
     p.add_argument("--deadband", type=float, default=0.002, help="gains closer than this are a tie")
     p = act("stats", "Supervisor statistics: methods, reviews, matches, judge-vs-reality concordance")
     p.add_argument("--weights")
+    p.add_argument("--rescored")
     p.add_argument("--deadband", type=float, default=0.002)
     p = act("digest", "latest reviews and match rationales, for the meta-review")
     p.add_argument("--last", type=int, default=40)

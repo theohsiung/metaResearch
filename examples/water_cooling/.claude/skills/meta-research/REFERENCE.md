@@ -384,6 +384,14 @@ pairs new ideas against them.
 A concordance near 0.5 means the tournament does not yet predict outcomes. In that case,
 trust cheap pilots over its ranking, and fix the review criteria in the meta-review.
 
+Two settings keep reality matches honest:
+- **`--deadband`**: set it to the run-to-run noise as a relative gain (for example, the
+  seed spread divided by the score). A difference inside the noise is not a win.
+- **`--rescored FILE`**: use it when the metric changed partway through a run, e.g. a
+  scoring bug fixed after some bundles were recorded. The ledger stays append-only, so
+  keep a JSON beside it with each bundle's re-scored values (`{bundle: {name: value}}`),
+  and pass it to `sync`, `rank`, `stats` and `schedule`.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is
