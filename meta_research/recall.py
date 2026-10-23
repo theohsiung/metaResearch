@@ -49,29 +49,34 @@ def _documents(run_dir: Path) -> list[dict[str, Any]]:
     return docs
 
 
-def recall(run_dir: Path | str, query: str, *, k: int = 5, k1: float = 1.5, b: float = 0.75) -> list[dict[str, Any]]:
-    """Top-``k`` bundles for ``query`` by BM25, best first; bundles with no query term are left out."""
-    docs = _documents(Path(run_dir))
-    terms = tokenize(query)
-    if not docs or not terms:
-        return []
-    avg_len = sum(len(d["tokens"]) for d in docs) / len(docs) or 1.0
-    df = Counter(t for d in docs for t in set(d["tokens"]))
-    n = len(docs)
-    hits = []
-    for d in docs:
-        tf = Counter(d["tokens"])
+def bm25(documents: list[list[str]], terms: list[str], *, k1: float = 1.5, b: float = 0.75) -> list[float]:
+    """BM25 score of each tokenized document for the query ``terms`` (0.0 when no term occurs)."""
+    if not documents or not terms:
+        return [0.0] * len(documents)
+    avg_len = sum(len(d) for d in documents) / len(documents) or 1.0
+    df = Counter(t for d in documents for t in set(d))
+    n = len(documents)
+    scores = []
+    for tokens in documents:
+        tf = Counter(tokens)
         score = 0.0
         for t in set(terms):
             if t not in tf:
                 continue
             idf = math.log(1 + (n - df[t] + 0.5) / (df[t] + 0.5))
-            score += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(d["tokens"]) / avg_len))
-        if score > 0:
-            hits.append({**{key: d[key] for key in ("id", "status", "scores", "change", "verdicts")},
-                         "score": round(score, 4)})
+            score += idf * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * len(tokens) / avg_len))
+        scores.append(score)
+    return scores
+
+
+def recall(run_dir: Path | str, query: str, *, k: int = 5, k1: float = 1.5, b: float = 0.75) -> list[dict[str, Any]]:
+    """Top-``k`` bundles for ``query`` by BM25, best first; bundles with no query term are left out."""
+    docs = _documents(Path(run_dir))
+    scores = bm25([d["tokens"] for d in docs], tokenize(query), k1=k1, b=b)
+    hits = [{**{key: d[key] for key in ("id", "status", "scores", "change", "verdicts")}, "score": round(score, 4)}
+            for d, score in zip(docs, scores) if score > 0]
     hits.sort(key=lambda h: (-h["score"], h["id"]))
     return hits[:k]
 
 
-__all__ = ["recall", "tokenize"]
+__all__ = ["bm25", "recall", "tokenize"]

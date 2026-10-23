@@ -292,6 +292,7 @@ def _parse_bundles(experience_dir: Path, warnings: list[str]) -> list[dict[str, 
                     "inspired_by": _split_names(front.get("inspired_by")),
                     "axis": str(front.get("axis") or ""),
                     "operator": str(front.get("operator") or ""),
+                    "idea": str(front.get("idea") or "").strip(),
                     "expected": _parse_expected(front.get("expected")),
                 }
             )

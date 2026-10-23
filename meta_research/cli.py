@@ -9,6 +9,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research frontier [--run-dir DIR]
     meta-research kg [--run-dir DIR]
     meta-research calibration [--run-dir DIR]
+    meta-research ideas <card|cards|add|review|schedule|match|rank|proximity|link|sync|stats|digest|metareview>
     meta-research progress [--out DIR] [--run-dir DIR]
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
@@ -383,6 +384,122 @@ def cmd_recall(args: argparse.Namespace) -> int:
     return 0
 
 
+def _weights(raw: str | None) -> dict[str, float] | None:
+    """Parse ``name=weight,...`` (as finalize's ``--weights``)."""
+    if not raw:
+        return None
+    weights = {}
+    for part in raw.split(","):
+        name, sep, value = part.partition("=")
+        if not sep:
+            raise ValueError(f"expected name=number pairs, got {part!r}")
+        weights[name.strip()] = float(value)
+    return weights
+
+
+def _fields(args: argparse.Namespace, keys: tuple[str, ...]) -> dict[str, Any]:
+    """Event fields from ``--file`` JSON, overridden by the flags given on the command line."""
+    fields: dict[str, Any] = {}
+    if getattr(args, "file", None):
+        doc = json.loads(Path(args.file).read_text(encoding="utf-8"))
+        if not isinstance(doc, dict):
+            raise ValueError(f"{args.file} must hold a JSON object")
+        fields.update(doc)
+    for key in keys:
+        value = getattr(args, key, None)
+        if value is not None:
+            fields[key] = value
+    for key in ("tags", "parents", "cites"):
+        if isinstance(fields.get(key), str):
+            fields[key] = [x.strip() for x in fields[key].split(",") if x.strip()]
+    return {k: v for k, v in fields.items() if k in keys}
+
+
+def cmd_ideas(args: argparse.Namespace) -> int:
+    """`meta-research ideas <action>` — the Co-Scientist idea board (ideas/board.jsonl)."""
+    from . import ideas as ib
+
+    board = ib.Board(Path(args.run_dir).resolve())
+    try:
+        weights = _weights(getattr(args, "weights", None))
+        action = args.action
+        if action == "card":
+            e = board.add_card(**_fields(args, ("title", "source", "technique", "claim", "conditions", "cost", "tags")))
+            print(logfmt.bold(f"card {e['id']}: {e['title']}"))
+        elif action == "cards":
+            for c in ib.search_cards(board, args.query or "", k=args.k):
+                print(f"  {c['id']}  {c['title']}  [{c['source']}]")
+                print(logfmt.dim(f"      {c['technique']}" + (f" | claim: {c['claim']}" if c["claim"] else "")))
+        elif action == "add":
+            e = board.add_idea(**_fields(args, ("title", "statement", "change", "origin", "strategy", "parents",
+                                                "cites", "tags")))
+            print(logfmt.bold(f"idea {e['id']}: {e['title']}"))
+            near = [(s, a if b == e["id"] else b) for (a, b), s in ib.similarity(board).items()
+                    if e["id"] in (a, b) and s >= args.duplicate]
+            for s, other in sorted(near, reverse=True):
+                print(logfmt.yellow(f"  near-duplicate of {other} ({board.ideas[other]['title']}), similarity {s:.2f}"))
+        elif action == "review":
+            fields = _fields(args, ("kind", "verdict", "critique"))
+            if args.scores:
+                fields["scores"] = _weights(args.scores)
+            board.add_review(args.idea, **fields)
+            print(f"{args.idea}: {fields['kind']} review -> {fields['verdict']}")
+        elif action == "schedule":
+            tested = set(ib.outcomes(board, weights=weights))
+            plan = ib.schedule(board, n=args.n, top_fraction=args.top_fraction, tested=tested)
+            if args.json:
+                print(json.dumps(plan, indent=2))
+                return 0
+            if not plan:
+                print(logfmt.dim("fewer than two ideas passed review; nothing to match"))
+            for m in plan:
+                print(f"  {m['a']} vs {m['b']}  [{m['format']}]  similarity {m['similarity']:.2f}, met {m['met']}x")
+                print(logfmt.dim(f"      {board.ideas[m['a']]['title']}  |  {board.ideas[m['b']]['title']}"))
+        elif action == "match":
+            board.add_match(args.a, args.b, winner=args.winner, format=args.format, rationale=args.rationale or "")
+            r = ib.elo(board)
+            print(f"{args.a} {r[args.a]['elo']:.0f}  {args.b} {r[args.b]['elo']:.0f}")
+        elif action == "rank":
+            rows = ib.rank(board, weights=weights)
+            if args.json:
+                print(json.dumps(rows, indent=2))
+                return 0
+            for row in rows:
+                real = "failed" if row["failed"] else ("" if row["gain"] is None else f"gain {row['gain']:+.4f}")
+                print(f"  {row['id']}  {row['elo']:7.1f}  {row['wins']}-{row['losses']}  {row['status']:8}"
+                      f"  {row['origin'][:3]}:{row['strategy'] or '-':12} {row['title']}  {real}")
+        elif action == "proximity":
+            graph = ib.proximity(board, threshold=args.threshold, duplicate=args.duplicate)
+            if args.json:
+                print(json.dumps(graph, indent=2))
+                return 0
+            for cluster in graph["clusters"]:
+                print("  " + ", ".join(f"{i} {board.ideas[i]['title']}" for i in cluster))
+            for d in graph["duplicates"]:
+                print(logfmt.yellow(f"  near-duplicates: {d['a']} ~ {d['b']} ({d['similarity']:.2f})"))
+        elif action == "link":
+            board.link(args.idea, args.bundle)
+            print(f"{args.idea} <- experience/{args.bundle}")
+        elif action == "sync":
+            added = ib.sync(board, weights=weights, deadband=args.deadband)
+            for m in added:
+                loser = m["b"] if m["winner"] == m["a"] else m["a"]
+                print(f"  reality: {m['winner']} beat {loser} ({m['rationale']})")
+            print(logfmt.dim(f"  {len(added)} reality match(es) played"))
+        elif action == "stats":
+            print(json.dumps(ib.stats(board, weights=weights, deadband=args.deadband), indent=2))
+        elif action == "digest":
+            print(ib.digest(board, last=args.last))
+        elif action == "metareview":
+            text = Path(args.file).read_text(encoding="utf-8") if args.file else (args.text or "")
+            board.add_metareview(text)
+            print("meta-review recorded")
+    except (ib.BoardError, ValueError, TypeError, FileNotFoundError) as exc:
+        _err(str(exc))
+        return 2
+    return 0
+
+
 def cmd_trajectory(args: argparse.Namespace) -> int:
     """`meta-research trajectory` — candidates over time with lineage edges (trajectory.png)."""
     from .suggest import objectives_from_frontier
@@ -729,6 +846,69 @@ def build_parser() -> argparse.ArgumentParser:
     p_rec.add_argument("--json", action="store_true")
     add_run_dir(p_rec)
     p_rec.set_defaults(func=cmd_recall)
+
+    p_ideas = sub.add_parser("ideas", help="Co-Scientist idea board: cards, ideas, reviews, Elo tournament")
+    acts = p_ideas.add_subparsers(dest="action", required=True)
+
+    def act(name: str, text: str) -> argparse.ArgumentParser:
+        p = acts.add_parser(name, help=text)
+        add_run_dir(p)
+        p.set_defaults(func=cmd_ideas)
+        return p
+
+    p = act("card", "add a literature card (one technique from a paper, model card or report)")
+    p.add_argument("--file", help="JSON object with the fields below")
+    for flag in ("title", "source", "technique", "claim", "conditions", "cost", "tags"):
+        p.add_argument(f"--{flag}")
+    p = act("cards", "list or search (BM25) the literature cards")
+    p.add_argument("query", nargs="?", default="")
+    p.add_argument("-k", type=int, default=10)
+    p = act("add", "add an idea (Generation), or an evolved one with --origin evolution --parents")
+    p.add_argument("--file", help="JSON object with the fields below")
+    for flag in ("title", "statement", "change", "strategy", "parents", "cites", "tags"):
+        p.add_argument(f"--{flag}")
+    p.add_argument("--origin", choices=["generation", "evolution"])
+    p.add_argument("--duplicate", type=float, default=0.75, help="similarity that flags a near-duplicate")
+    p = act("review", "record a Reflection review of an idea")
+    p.add_argument("idea")
+    p.add_argument("--kind", required=True,
+                   choices=["initial", "full", "deep", "observation", "simulation", "tournament"])
+    p.add_argument("--verdict", required=True, choices=["pass", "revise", "fail"])
+    p.add_argument("--scores", help="e.g. correctness=4,novelty=3,feasibility=5")
+    p.add_argument("--critique")
+    p.add_argument("--file", help="JSON object holding the critique")
+    p = act("schedule", "the next tournament matches (new and top ideas, similar opponents)")
+    p.add_argument("-n", type=int, default=4)
+    p.add_argument("--top-fraction", type=float, default=0.25, help="share of top ideas whose matches are debates")
+    p.add_argument("--weights", help="objective weights for realized gains, e.g. 's=0.6,o=0.4'")
+    p.add_argument("--json", action="store_true")
+    p = act("match", "record a judged match and update Elo")
+    p.add_argument("a")
+    p.add_argument("b")
+    p.add_argument("--winner", required=True)
+    p.add_argument("--format", default="single", choices=["single", "debate"])
+    p.add_argument("--rationale")
+    p = act("rank", "ideas by Elo with status and realized gain")
+    p.add_argument("--weights")
+    p.add_argument("--json", action="store_true")
+    p = act("proximity", "similarity clusters and near-duplicates")
+    p.add_argument("--threshold", type=float, default=0.3)
+    p.add_argument("--duplicate", type=float, default=0.75)
+    p.add_argument("--json", action="store_true")
+    p = act("link", "mark an evaluated bundle as the test of an idea")
+    p.add_argument("idea")
+    p.add_argument("bundle", help="experience/ bundle id, e.g. 012_d1_same_skill_data")
+    p = act("sync", "play reality matches between tested ideas from their realized gains")
+    p.add_argument("--weights")
+    p.add_argument("--deadband", type=float, default=0.002, help="gains closer than this are a tie")
+    p = act("stats", "Supervisor statistics: methods, reviews, matches, judge-vs-reality concordance")
+    p.add_argument("--weights")
+    p.add_argument("--deadband", type=float, default=0.002)
+    p = act("digest", "latest reviews and match rationales, for the meta-review")
+    p.add_argument("--last", type=int, default=40)
+    p = act("metareview", "record a meta-review (fed into the next round's prompts)")
+    p.add_argument("--file")
+    p.add_argument("--text")
 
     p_traj = sub.add_parser("trajectory", help="plot candidates over time with lineage edges (trajectory.png)")
     p_traj.add_argument("--objective", default=None, help="objective on the y axis (default: first)")

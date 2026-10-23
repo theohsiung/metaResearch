@@ -47,7 +47,14 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    `trajectory` propose an operator, parents and bundles, and show the lineage (REFERENCE.md §5c).
 2. **Form ONE falsifiable hypothesis** targeting a **mechanism**, not a parameter
    value (see REFERENCE.md mechanism axes). Name the failure mode the diagnostic
-   revealed and the single mechanism you will change to fix it.
+   revealed and the single mechanism you will change to fix it. When evaluations are
+   expensive, draw it from an ideation round instead (REFERENCE.md §5d):
+   - literature cards and ideas;
+   - reviews by independent subagents;
+   - an Elo tournament, plus evolution and a meta-review.
+
+   Then take the top untested idea from `meta-research ideas rank` and name it in
+   hyp.json's `idea`.
 3. **Write `designs/<name>.py`**: copy a frontier design and change exactly **one
    mechanism**. Dry-run first (mandatory prototype): import the module, call
    `build()`, sanity-check params fit the envelope / pass obvious feasibility before

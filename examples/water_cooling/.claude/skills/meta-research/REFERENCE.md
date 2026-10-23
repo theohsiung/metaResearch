@@ -309,6 +309,81 @@ points coloured by the frontier as it stands now, a best-so-far step line, refer
 levels, and the `change` line of each candidate that raised the best score or sits on
 the frontier. Read it to see which lineage is still moving and which ones stalled.
 
+## 5d. Ideation rounds (Co-Scientist)
+
+When one evaluation is expensive (an ML training run of an hour or more), spend thinking
+before compute: run an ideation round after Co-Scientist (Gottweis et al.,
+arXiv:2502.18864). You play its agents; `meta-research ideas` keeps the board in
+`ideas/board.jsonl` (append-only; commit it with the bundles).
+
+1. **Generation.** Search papers, model cards, technical reports and leaderboards for the
+   goal in `program.md`. Record each technique that could apply as a literature card:
+   `ideas card --title T --source URL --technique "..." --claim "..." --conditions "..." --cost "..."`
+   (`ideas cards "<query>"` searches them). Then add ideas with `ideas add --file idea.json`
+   (`title`; `statement`: the mechanism and its falsifiable prediction; `change`;
+   `strategy`: literature, debate, assumptions or expansion; `cites`: card ids such as
+   `L003` and bundle ids; `tags`). Read the last meta-review and the proximity clusters
+   first, and look for the regions nobody has tried (research expansion). `add` warns
+   about near-duplicates; run `recall` too, so an idea the ledger already tested is not
+   proposed again.
+2. **Reflection.** Review each new idea and record it with
+   `ideas review ID --kind K --verdict pass|revise|fail --scores correctness=4,novelty=3,feasibility=5 --critique "..."`.
+   - `initial`: no tools. Check correctness, novelty against the ledger, and feasibility
+     within the budget, licences and rules in `program.md`.
+   - `full`: the same checks with literature.
+   - `deep`: split the idea into its assumptions and check each one. A wrong assumption
+     that is not fundamental means `revise`.
+   - `simulation`: walk through the experiment step by step and name where it would fail.
+   - `observation`: check whether the idea explains results already in the ledger.
+
+   Only ideas whose latest verdict is `pass` enter the tournament.
+3. **Ranking.** `ideas schedule -n N` lists the next matches. New ideas play first,
+   against their most similar opponent, and matches between top-ranked ideas are
+   debates. Compare the two ideas on:
+   - expected gain on the objectives;
+   - whether one evaluation can test it;
+   - cost and risk.
+
+   A `single` match is one judgment; in a `debate`, argue each side for a few turns,
+   then decide. Record each match with
+   `ideas match A B --winner W --format single|debate --rationale "..."`.
+   Ratings are Elo, starting at 1200 (K=32).
+4. **Evolution.** Take the top of `ideas rank` and add *new* ideas with
+   `--origin evolution --parents i003,i007 --strategy S`, where S is one of grounding,
+   feasibility, inspiration, combination, simplification or out-of-box. Never edit an
+   existing idea: the evolved one must win its own matches.
+5. **Proximity.** `ideas proximity` prints clusters and near-duplicates. Reject the
+   weaker of two duplicates with a review, and note clusters that are under-explored.
+6. **Meta-review.** Read `ideas digest`, the latest critiques and match rationales.
+   Write the recurring problems and debate patterns into
+   `ideas metareview --file meta.md`. Read the latest meta-review at the start of every
+   round and apply it to both generation and reviews.
+7. **Pick.** Evaluate the top-rated untested `active` idea: put `"idea": "<id>"` in
+   `hyp.json`, which stores it in the `hypothesis.md` front-matter. For candidates
+   evaluated before the board existed, run `ideas link ID BUNDLE`.
+
+**Independent judges.** A context that wrote an idea favours it when it reviews or judges
+it. If the runtime has subagents (Claude Code's Agent tool), give each review and each
+match to a fresh subagent with only the idea texts, `program.md` and the cards and bundles
+they cite. Record its verdict, and keep the idea's author out of the judging.
+
+**Reality checks.** After evaluations, run `ideas sync [--weights a=0.6,b=0.4]`. It plays a
+reality match between every pair of tested ideas:
+- The winner is the idea with the larger realized gain over its parent; with no
+  `--weights`, the gain is on the first objective.
+- Crashed and infeasible runs, including early-stopped ones, lose.
+- Reality matches move ratings by K=64, against 32 for a judged match.
+
+Tested ideas then act as anchors: their ratings follow real outcomes, and `schedule`
+pairs new ideas against them.
+
+`ideas stats` reports, per generation method (`origin:strategy`):
+- the number of ideas, their mean Elo, how many were tested and how many improved;
+- the *concordance*: how often a judged match picked the idea that later did better.
+
+A concordance near 0.5 means the tournament does not yet predict outcomes. In that case,
+trust cheap pilots over its ranking, and fix the review criteria in the meta-review.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is

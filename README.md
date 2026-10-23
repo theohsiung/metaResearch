@@ -105,6 +105,7 @@ meta-research context --operator OP --parent ID              # list the bundles 
 meta-research recall "<idea>"                                # earlier candidates that tried a similar idea, and how they went
 meta-research finalize --top K --pick <sealed key> --commit  # reveal sealed holdout scores of the top-K, pick one (logged)
 meta-research trajectory [--objective OBJ] [--ref LABEL=V]   # trajectory.png: every candidate over time with its lineage
+meta-research ideas <action>                                 # idea board: literature cards, reviews, Elo tournament
 meta-research init <name>                                    # scaffold a new experiment dir
 ```
 
@@ -127,6 +128,8 @@ still decides what to try.
 | Scoped experience per operator | `context` | AIRA-dojo | Design choice in the paper |
 | Retrospective memory: look up earlier attempts at an idea | `recall` | MLEvolve | Removing memory lowered its medal rate (small, noisy ablation) |
 | Search-trajectory plot: scores over time, parent→child lines (solid mutation, dashed crossover), reference levels, the hypotheses that moved the best score | `trajectory` | AIRA_2, Figure 7 | A diagnostic view, not an ablated mechanism |
+| Ideation rounds: literature cards, reviews (initial, full, deep verification, simulation), an Elo tournament (single-turn and debate matches, similar and new ideas first), evolution into new ideas, proximity clusters, meta-review feedback | `ideas` | Co-Scientist | Elo concordant with accuracy on GPQA and rising with test-time compute (203 goals); debate matches reduced positional bias; meta-review raised review AUC 0.521 → 0.597; lab-validated hypotheses |
+| Reality matches: evaluated ideas play matches decided by their realized gain, and the judge's agreement with reality is reported | `ideas sync`, `ideas stats` | Ours, on top of Co-Scientist | Measured per run (`concordance`) |
 
 Studied but not adopted yet: OpenEvolve's cascade evaluation (cheap stages gate the
 expensive one), its MAP-Elites / island diversity archive, MLEvolve's pre-execution
@@ -172,6 +175,7 @@ meta-research/
     suggest.py              # `suggest` (operator + parents) and `context` (bundles to read per operator)
     recall.py               # `recall`: BM25 over earlier hypotheses
     trajectory.py           # `trajectory`: candidates over time with lineage edges (trajectory.png)
+    ideas.py                # `ideas`: Co-Scientist idea board (ideas/board.jsonl), Elo, schedule, reality matches
     cli.py                  # `meta-research eval|seed|frontier|kg|init`
     evaluators/
       __init__.py           # re-export the three adapters
@@ -239,5 +243,7 @@ come from:
 - [MLEvolve: A Self-Evolving Framework for Automated Machine Learning Algorithm Discovery](https://arxiv.org/abs/2606.06473)
   ([InternScience/MLEvolve](https://github.com/InternScience/MLEvolve)) — stagnation triggers (`suggest`) and
   retrospective memory (`recall`).
+- [Accelerating scientific discovery with Co-Scientist](https://arxiv.org/abs/2502.18864) — the Generation,
+  Reflection, Ranking (Elo tournament), Proximity, Evolution and Meta-review roles behind `ideas`.
 - [OpenEvolve](https://github.com/algorithmicsuperintelligence/openevolve) — studied for its cascade evaluation
   and diversity archive; not adopted yet.

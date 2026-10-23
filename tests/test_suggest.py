@@ -63,7 +63,7 @@ def lab(tmp_path: Path):
     experiment = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(experiment)
 
-    def add(name: str, params: dict, parent: str = "", operator: str = "", inspired_by=None) -> str:
+    def add(name: str, params: dict, parent: str = "", operator: str = "", inspired_by=None, idea: str = "") -> str:
         (run / "designs" / f"{name}.py").write_text(
             "from meta_research import DesignSpec\n\n\ndef build():\n"
             f"    return DesignSpec(params={params!r})\n", encoding="utf-8")
@@ -72,6 +72,8 @@ def lab(tmp_path: Path):
         hyp = {"axis": "test", "parent": parent, "operator": operator, "change": name}
         if inspired_by:
             hyp["inspired_by"] = inspired_by
+        if idea:
+            hyp["idea"] = idea
         evaluate_and_record(name, experiment, run, hypothesis=hyp)
         return max(r["id"] for r in load_rows(run))
 

@@ -559,7 +559,8 @@ def _render_hypothesis_md(
 
     Front-matter keys, in fixed order: ``name``, ``iteration``, ``axis``,
     ``parent``, ``change`` (the one-line "what was changed"), ``inspired_by``
-    (comma-separated names; multi-parent lineage, 7.3), ``expected``,
+    (comma-separated names; multi-parent lineage, 7.3), ``idea`` (the idea-board
+    id this candidate tests, :mod:`meta_research.ideas`), ``expected``,
     ``status``. The prose body is the agent's ``reasoning`` (which prior
     heatmaps/results were inspected and what failure mode this design targets).
     """
@@ -568,6 +569,7 @@ def _render_hypothesis_md(
     parent = _scalar(hypothesis.get("parent"))
     change = _scalar(hypothesis.get("change"))
     inspired_by = _inspired_by_scalar(hypothesis.get("inspired_by"))
+    idea = _scalar(hypothesis.get("idea"))
     expected = _expected_scalar(hypothesis.get("expected"))
     reasoning = str(hypothesis.get("reasoning") or "").strip()
 
@@ -580,6 +582,7 @@ def _render_hypothesis_md(
         f"parent: {_yaml_scalar(parent)}",
         f"change: {_yaml_scalar(change)}",
         f"inspired_by: {_yaml_scalar(inspired_by)}",
+        f"idea: {_yaml_scalar(idea)}",
         f"expected: {_yaml_scalar(expected)}",
         f"status: {_yaml_scalar(status)}",
         "---",
