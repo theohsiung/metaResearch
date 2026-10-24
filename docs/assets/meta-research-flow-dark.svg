@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1412" viewBox="0 0 1200 1412" role="img" aria-labelledby="t d">
+<title id="t">meta-research: how a run flows</title>
+<desc id="d">Setup (init, prepare.py, program.md, designs/, seed) feeds a loop the agent runs in-session: inspect experience with suggest/context/recall/trajectory, optionally run a Co-Scientist ideation round, form one falsifiable hypothesis, write one design, run meta-research eval which scores, stores a bundle, updates frontier, kg and results.tsv and commits, then read the result and repeat. An append-only ledger is the shared store; sealed holdout scores are kept aside and revealed only by finalize.</desc>
+<defs><style>
+text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; fill: #e6edf3; }
+.m { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace; }
+.text { fill: #e6edf3; }
+.muted { fill: #9198a1; }
+.sec { fill: #9198a1; letter-spacing: 0.08em; }
+.bg { fill: #0d1117; }
+.panel { fill: #151b23; stroke: #3d444d; }
+.ipanel { fill: #0d1117; stroke: #a371f7; stroke-opacity: 0.55; }
+.agent { fill: #1e1530; stroke: #a371f7; }
+.tool { fill: #0c1d33; stroke: #4493f8; }
+.store { fill: #241c0b; stroke: #d29922; }
+.input { fill: #161b22; stroke: #6e7681; }
+.sealed { fill: #161b22; stroke: #8b949e; }
+.chip { fill: #0d1117; stroke: #3d444d; }
+.cmdpill { fill: #0c1d33; stroke: #4493f8; stroke-width: 0.8; }
+.tt-agent { fill: #d2a8ff; }
+.tt-tool { fill: #79c0ff; }
+.tt-store { fill: #e3b341; }
+.tt-input { fill: #c9d1d9; }
+.tag-agent { fill: #a371f7; }
+.tag-input { fill: #6e7681; }
+.tagtext-input { fill: #0d1117; letter-spacing: 0.06em; }
+.tag-tool { fill: #4493f8; }
+.tagtext-agent, .tagtext-tool { fill: #0d1117; letter-spacing: 0.06em; }
+.ln-line { stroke: #6e7681; }
+.ln-exp { stroke: #d29922; }
+.ln-real { stroke: #3fb950; }
+.dot-exp { fill: #d29922; }
+.exp-t { fill: #d29922; font-weight: 600; }
+.real-t { fill: #3fb950; font-weight: 600; }
+.lock { stroke: #9198a1; }
+.lockbody { fill: #9198a1; }
+</style><marker id="ah-line" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,1 L10,5 L0,9 z" fill="#6e7681"/></marker><marker id="ah-exp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,1 L10,5 L0,9 z" fill="#d29922"/></marker><marker id="ah-real" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" orient="auto-start-reverse" markerUnits="userSpaceOnUse"><path d="M0,1 L10,5 L0,9 z" fill="#3fb950"/></marker></defs>
+<rect class="bg" x="0" y="0" width="1200" height="1412" rx="16"/>
+<text x="40" y="46" class="text" font-size="22" font-weight="600">How a meta-research run flows</text>
+<text x="40" y="70" class="muted" font-size="14">The framework is deterministic tooling. The agent (Claude Code following the skill) runs the loop in-session.</text>
+<rect x="40" y="92" width="26" height="16" rx="5" class="agent" stroke-width="1.4"/>
+<text x="74" y="104.5" class="muted" font-size="12.5">Agent reasoning</text>
+<rect x="202.6015625" y="92" width="26" height="16" rx="5" class="tool" stroke-width="1.4"/>
+<text x="236.6015625" y="104.5" class="muted" font-size="12.5">Deterministic tool (CLI)</text>
+<rect x="406.98046875" y="92" width="26" height="16" rx="5" class="store" stroke-width="1.4"/>
+<text x="440.98046875" y="104.5" class="muted" font-size="12.5">Append-only store</text>
+<rect x="581.72265625" y="92" width="26" height="16" rx="5" class="input" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="615.72265625" y="104.5" class="muted" font-size="12.5">Fixed input (human-written)</text>
+<path d="M816.33203125,100 L846.33203125,100" class="ln-exp" fill="none" stroke-width="2.4" marker-end="url(#ah-exp)"/>
+<text x="854.33203125" y="104.5" class="muted" font-size="12.5">experience loop</text>
+<path d="M980.29296875,100 L1010.29296875,100" class="ln-real" fill="none" stroke-width="2.4" marker-end="url(#ah-real)"/>
+<text x="1018.29296875" y="104.5" class="muted" font-size="12.5">reality loop</text>
+<text x="40" y="146" class="sec" font-size="12.5" font-weight="600">1 · SETUP</text>
+<rect x="40" y="158" width="196" height="76" rx="10" class="tool" stroke-width="1.4"/>
+<text x="54" y="182" class="tt-tool m" font-size="13" font-weight="600">meta-research init</text>
+<text x="54" y="203" class="muted" font-size="12.5">stub or example + skill,</text>
+<text x="54" y="221" class="muted" font-size="12.5">in its own git repository</text>
+<path d="M236,196.0 L262,196.0" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="264" y="158" width="254" height="76" rx="10" class="input" stroke-width="1.4" stroke-dasharray="5 4"/>
+<rect x="437.36328125" y="166" width="72.63671875" height="16" rx="8" class="tag-input"/>
+<text x="473.681640625" y="177.6" class="tagtext-input" font-size="9.5" font-weight="600" text-anchor="middle">READ-ONLY</text>
+<text x="278" y="182" class="tt-input m" font-size="14" font-weight="600">prepare.py</text>
+<text x="278" y="203" class="muted" font-size="12.5">OBJECTIVES · BUDGET · OPERATING</text>
+<text x="278" y="221" class="muted" font-size="12.5">BASELINES · make_evaluator()</text>
+<rect x="530" y="158" width="168" height="76" rx="10" class="input" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="544" y="182" class="tt-input m" font-size="14" font-weight="600">program.md</text>
+<text x="544" y="203" class="muted" font-size="12.5">the domain program,</text>
+<text x="544" y="221" class="muted" font-size="12.5">edited by the human</text>
+<rect x="710" y="158" width="172" height="76" rx="10" class="input" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="724" y="182" class="tt-input m" font-size="14" font-weight="600">designs/</text>
+<text x="724" y="203" class="muted" font-size="12.5">baseline modules; the</text>
+<text x="724" y="221" class="muted" font-size="12.5">agent writes only here</text>
+<path d="M882,196.0 L908,196.0" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="910" y="158" width="250" height="76" rx="10" class="tool" stroke-width="1.4"/>
+<text x="924" y="182" class="tt-tool m" font-size="13" font-weight="600">meta-research seed --commit</text>
+<text x="924" y="203" class="muted" font-size="12.5">evaluate every baseline once;</text>
+<text x="924" y="221" class="muted" font-size="12.5">seeds the ledger and frontier</text>
+<rect x="20" y="264" width="1160" height="816" rx="14" class="panel" stroke-width="1.4"/>
+<text x="40" y="289" class="sec" font-size="12.5" font-weight="600">2 · THE LOOP</text>
+<text x="316" y="289" class="muted" font-size="12.5">run by the agent in-session, every iteration, until interrupted</text>
+<path d="M1035,234 L1035,241.0 Q1035,248 1028.0,248 L309,248 Q300,248 300,257 L300,303" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="64" y="304" width="492" height="182" rx="10" class="agent" stroke-width="1.4"/>
+<rect x="499.93359375" y="312" width="48.06640625" height="16" rx="8" class="tag-agent"/>
+<text x="523.966796875" y="323.6" class="tagtext-agent" font-size="9.5" font-weight="600" text-anchor="middle">AGENT</text>
+<text x="78" y="329" class="tt-agent" font-size="14.5" font-weight="600">Inspect the experience (never skip)</text>
+<text x="78" y="351" font-size="12.5" xml:space="preserve"><tspan class="text m">frontier</tspan><tspan class="muted"> · </tspan><tspan class="text m">results.tsv</tspan><tspan class="muted"> · </tspan><tspan class="text m">progress</tspan><tspan class="muted"> · </tspan><tspan class="text m">kg.json</tspan><tspan class="muted">  (an index only)</tspan></text>
+<text x="78" y="369" class="muted" font-size="12.5">then Read the bundles: heatmap / diagnostics, hypothesis.md</text>
+<rect x="78.0" y="384" width="110.0" height="46" rx="8" class="tool" stroke-width="1.2"/>
+<text x="133.0" y="403" class="tt-tool m" font-size="12.5" font-weight="600" text-anchor="middle">suggest</text>
+<text x="133.0" y="420" class="muted" font-size="11" text-anchor="middle">operator, parent</text>
+<rect x="196.0" y="384" width="110.0" height="46" rx="8" class="tool" stroke-width="1.2"/>
+<text x="251.0" y="403" class="tt-tool m" font-size="12.5" font-weight="600" text-anchor="middle">context</text>
+<text x="251.0" y="420" class="muted" font-size="11" text-anchor="middle">bundles to read</text>
+<rect x="314.0" y="384" width="110.0" height="46" rx="8" class="tool" stroke-width="1.2"/>
+<text x="369.0" y="403" class="tt-tool m" font-size="12.5" font-weight="600" text-anchor="middle">recall</text>
+<text x="369.0" y="420" class="muted" font-size="11" text-anchor="middle">BM25 memory</text>
+<rect x="432.0" y="384" width="110.0" height="46" rx="8" class="tool" stroke-width="1.2"/>
+<text x="487.0" y="403" class="tt-tool m" font-size="12.5" font-weight="600" text-anchor="middle">trajectory</text>
+<text x="487.0" y="420" class="muted" font-size="11" text-anchor="middle">lineage plot</text>
+<text x="78" y="452" class="muted" font-size="12">suggest: draft · improve · debug · crossover; parent by</text>
+<text x="78" y="470" class="muted" font-size="12">rank selection (T=0.2); stagnant parents are skipped</text>
+<path d="M310,486 L310,497" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<path d="M310,498 L428,524 L310,550 L192,524 Z" class="agent" stroke-width="1.4"/>
+<text x="310" y="528.5" class="tt-agent" font-size="13" font-weight="600" text-anchor="middle">Evaluation expensive?</text>
+<path d="M310,550 L310,579" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<text x="318" y="567" class="muted" font-size="12" font-weight="600">no</text>
+<rect x="64" y="580" width="492" height="100" rx="10" class="agent" stroke-width="1.4"/>
+<rect x="499.93359375" y="588" width="48.06640625" height="16" rx="8" class="tag-agent"/>
+<text x="523.966796875" y="599.6" class="tagtext-agent" font-size="9.5" font-weight="600" text-anchor="middle">AGENT</text>
+<text x="78" y="605" font-size="14.5" xml:space="preserve"><tspan class="tt-agent" font-weight="600">Form ONE falsifiable hypothesis → </tspan><tspan class="tt-agent m" font-weight="600">hyp.json</tspan></text>
+<text x="78" y="627" class="muted" font-size="12.5">axis · parent · operator · change · idea</text>
+<text x="78" y="645" font-size="12.5" xml:space="preserve"><tspan class="text m">expected</tspan><tspan class="muted">: {objective: {direction, rel}}, graded after eval</tspan></text>
+<text x="78" y="663" font-size="12.5" xml:space="preserve"><tspan class="text m">reasoning</tspan><tspan class="muted">: the full record (evidence, options, prediction)</tspan></text>
+<path d="M310,680 L310,699" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="64" y="700" width="492" height="64" rx="10" class="agent" stroke-width="1.4"/>
+<rect x="499.93359375" y="708" width="48.06640625" height="16" rx="8" class="tag-agent"/>
+<text x="523.966796875" y="719.6" class="tagtext-agent" font-size="9.5" font-weight="600" text-anchor="middle">AGENT</text>
+<text x="78" y="725" font-size="14.5" xml:space="preserve"><tspan class="tt-agent" font-weight="600">Write </tspan><tspan class="tt-agent m" font-weight="600">designs/&lt;name&gt;.py</tspan></text>
+<text x="78" y="747" class="muted" font-size="12.5">change exactly one mechanism; dry-run build() + feasibility</text>
+<path d="M310,764 L310,783" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="64" y="784" width="492" height="182" rx="10" class="tool" stroke-width="1.4"/>
+<rect x="507.31640625" y="792" width="40.68359375" height="16" rx="8" class="tag-tool"/>
+<text x="527.658203125" y="803.6" class="tagtext-tool" font-size="9.5" font-weight="600" text-anchor="middle">TOOL</text>
+<text x="78" y="809" class="tt-tool m" font-size="12.5" font-weight="600">meta-research eval &lt;name&gt; --hypothesis hyp.json --commit</text>
+<rect x="78" y="824" width="160" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="158.0" y="843" class="tt-tool" font-size="12" font-weight="600" text-anchor="middle">Evaluator</text>
+<text x="158.0" y="860" class="muted" font-size="11" text-anchor="middle">Numerical · Surrogate · API</text>
+<rect x="262" y="824" width="140" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="332.0" y="843" class="tt-tool" font-size="12" font-weight="600" text-anchor="middle">Experience bundle</text>
+<text x="332.0" y="860" class="muted" font-size="11" text-anchor="middle">append-only</text>
+<rect x="426" y="824" width="116" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="484.0" y="843" class="tt-tool m" font-size="12" font-weight="600" text-anchor="middle">frontier.json</text>
+<text x="484.0" y="860" class="muted" font-size="11" text-anchor="middle">Pareto set</text>
+<rect x="78" y="888" width="160" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="158.0" y="907" class="tt-tool" font-size="12" font-weight="600" text-anchor="middle">git commit</text>
+<text x="158.0" y="924" class="muted" font-size="11" text-anchor="middle">never git reset</text>
+<rect x="262" y="888" width="140" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="332.0" y="907" class="tt-tool m" font-size="12" font-weight="600" text-anchor="middle">results.tsv</text>
+<text x="332.0" y="924" class="muted" font-size="11" text-anchor="middle">flat timeline</text>
+<rect x="426" y="888" width="116" height="46" rx="8" class="chip" stroke-width="1.1"/>
+<text x="484.0" y="907" class="tt-tool m" font-size="12" font-weight="600" text-anchor="middle">kg.json</text>
+<text x="484.0" y="924" class="muted" font-size="11" text-anchor="middle">prediction verdicts</text>
+<path d="M238,847 L261,847" class="ln-line" fill="none" stroke-width="1.3" marker-end="url(#ah-line)"/>
+<path d="M402,847 L425,847" class="ln-line" fill="none" stroke-width="1.3" marker-end="url(#ah-line)"/>
+<path d="M484.0,870 L484.0,887" class="ln-line" fill="none" stroke-width="1.3" marker-end="url(#ah-line)"/>
+<path d="M426,911 L403,911" class="ln-line" fill="none" stroke-width="1.3" marker-end="url(#ah-line)"/>
+<path d="M262,911 L239,911" class="ln-line" fill="none" stroke-width="1.3" marker-end="url(#ah-line)"/>
+<text x="78" y="954" font-size="12" xml:space="preserve"><tspan class="muted">sealed holdout scores are split off → </tspan><tspan class="text m">.sealed/</tspan><tspan class="muted"> (never read in search)</tspan></text>
+<path d="M310,966 L310,985" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="64" y="986" width="492" height="76" rx="10" class="agent" stroke-width="1.4"/>
+<rect x="499.93359375" y="994" width="48.06640625" height="16" rx="8" class="tag-agent"/>
+<text x="523.966796875" y="1005.6" class="tagtext-agent" font-size="9.5" font-weight="600" text-anchor="middle">AGENT</text>
+<text x="78" y="1011" class="tt-agent" font-size="14.5" font-weight="600">Read the result + new diagnostics</text>
+<text x="78" y="1032" class="muted" font-size="12.5">frontier extended? prediction confirmed or refuted?</text>
+<text x="78" y="1050" font-size="12.5" xml:space="preserve"><tspan class="tt-tool m">meta-research calibration</tspan><tspan class="muted">: running hypothesis hit-rate</tspan></text>
+<rect x="640" y="304" width="520" height="690" rx="12" class="ipanel" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="660" y="330" class="text" font-size="15" font-weight="600">Ideation round (optional)</text>
+<text x="881.46875" y="330" class="muted" font-size="12.5">after Co-Scientist</text>
+<text x="660" y="350" font-size="12" xml:space="preserve"><tspan class="muted">the agent plays every role; </tspan><tspan class="tt-tool m">meta-research ideas</tspan><tspan class="muted"> keeps ideas/board.jsonl</tspan></text>
+<path d="M428,524 L589,524 Q598,524 598,515 L598,335 Q598,326 607,326 L639,326" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<text x="438" y="517" class="muted" font-size="12" font-weight="600">yes</text>
+<rect x="680" y="368" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="388" class="tt-agent" font-size="13.5" font-weight="600">1  Generation</text>
+<rect x="976.0625" y="375" width="119.9375" height="18" rx="5" class="cmdpill"/>
+<text x="1036.03125" y="388" class="tt-tool m" font-size="11" text-anchor="middle">ideas card · add</text>
+<text x="694" y="407" class="muted" font-size="12">Literature cards from papers, model cards and reports;</text>
+<text x="694" y="422" class="muted" font-size="12">ideas = one mechanism + a falsifiable prediction</text>
+<path d="M892.0,428 L892.0,437" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="438" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="458" class="tt-agent" font-size="13.5" font-weight="600">2  Reflection</text>
+<rect x="1002.546875" y="445" width="93.453125" height="18" rx="5" class="cmdpill"/>
+<text x="1049.2734375" y="458" class="tt-tool m" font-size="11" text-anchor="middle">ideas review</text>
+<text x="694" y="477" class="muted" font-size="12">Reviews: initial · full · deep · simulation · observation,</text>
+<text x="694" y="492" class="muted" font-size="12">each by an independent subagent; only 'pass' plays on</text>
+<path d="M892.0,498 L892.0,507" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="508" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="528" class="tt-agent" font-size="13.5" font-weight="600">3  Ranking</text>
+<rect x="936.3359375" y="515" width="159.6640625" height="18" rx="5" class="cmdpill"/>
+<text x="1016.16796875" y="528" class="tt-tool m" font-size="11" text-anchor="middle">ideas schedule · match</text>
+<text x="694" y="547" class="muted" font-size="12">Elo tournament (start 1200, K=32): single-turn and</text>
+<text x="694" y="562" class="muted" font-size="12">debate matches, new ideas vs. their most similar rival</text>
+<path d="M892.0,568 L892.0,577" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="578" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="598" class="tt-agent" font-size="13.5" font-weight="600">4  Evolution</text>
+<rect x="896.609375" y="585" width="199.390625" height="18" rx="5" class="cmdpill"/>
+<text x="996.3046875" y="598" class="tt-tool m" font-size="11" text-anchor="middle">ideas add --origin evolution</text>
+<text x="694" y="617" class="muted" font-size="12">Top ideas spawn new ideas (grounding, combination, …);</text>
+<text x="694" y="632" class="muted" font-size="12">never edits: an evolved idea must win its own matches</text>
+<path d="M892.0,638 L892.0,647" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="648" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="668" class="tt-agent" font-size="13.5" font-weight="600">5  Proximity</text>
+<rect x="982.68359375" y="655" width="113.31640625" height="18" rx="5" class="cmdpill"/>
+<text x="1039.341796875" y="668" class="tt-tool m" font-size="11" text-anchor="middle">ideas proximity</text>
+<text x="694" y="687" class="muted" font-size="12">Similarity clusters and near-duplicates; reject the</text>
+<text x="694" y="702" class="muted" font-size="12">weaker duplicate, note the regions nobody has tried</text>
+<path d="M892.0,708 L892.0,717" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="718" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="738" class="tt-agent" font-size="13.5" font-weight="600">6  Meta-review</text>
+<rect x="916.47265625" y="725" width="179.52734375" height="18" rx="5" class="cmdpill"/>
+<text x="1006.236328125" y="738" class="tt-tool m" font-size="11" text-anchor="middle">ideas digest · metareview</text>
+<text x="694" y="757" class="muted" font-size="12">Recurring problems in critiques and debates,</text>
+<text x="694" y="772" class="muted" font-size="12">read at the start of every round</text>
+<path d="M892.0,778 L892.0,787" class="ln-line" fill="none" stroke-width="1.2" marker-end="url(#ah-line)"/>
+<rect x="680" y="788" width="424" height="60" rx="9" class="agent" stroke-width="1.4"/>
+<text x="694" y="808" class="tt-agent" font-size="13.5" font-weight="600">7  Pick</text>
+<rect x="1015.7890625" y="795" width="80.2109375" height="18" rx="5" class="cmdpill"/>
+<text x="1055.89453125" y="808" class="tt-tool m" font-size="11" text-anchor="middle">ideas rank</text>
+<text x="694" y="827" class="muted" font-size="12">The top-rated untested idea becomes the hypothesis:</text>
+<text x="694" y="842" class="muted" font-size="12">"idea": "&lt;id&gt;" in hyp.json</text>
+<path d="M680,748.0 L671,748.0 Q662,748.0 662,739.0 L662,406.5 Q662,398.0 670.5,398.0 L679,398.0" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)" stroke-dasharray="5 4"/>
+<text x="653" y="573.0" class="muted" font-size="11.5" text-anchor="middle" transform="rotate(-90 653 573.0)">feeds the next round</text>
+<path d="M680,818.0 L621,818.0 Q612,818.0 612,809.0 L612,639 Q612,630 603,630 L557,630" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<rect x="680" y="878" width="424" height="96" rx="9" class="tool" stroke-width="1.4"/>
+<text x="694" y="899" class="tt-tool" font-size="13.5" font-weight="600">Reality loop</text>
+<rect x="962.8203125" y="886" width="133.1796875" height="18" rx="5" class="cmdpill"/>
+<text x="1029.41015625" y="899" class="tt-tool m" font-size="11" text-anchor="middle">ideas sync · stats</text>
+<text x="694" y="920" class="muted" font-size="12">Evaluated ideas play reality matches decided by realized gain</text>
+<text x="694" y="937" class="muted" font-size="12">(K=64; --deadband = run noise; optional --rescored overlay)</text>
+<text x="694" y="954" class="muted" font-size="12">stats: how often the judges agreed with reality (concordance)</text>
+<path d="M1104,926.0 L1123,926.0 Q1132,926.0 1132,917.0 L1132,547.0 Q1132,538.0 1123,538.0 L1105,538.0" class="ln-real" fill="none" stroke-width="2.2" marker-end="url(#ah-real)"/>
+<text x="1147" y="732.0" class="real-t" font-size="11.5" text-anchor="middle" transform="rotate(-90 1147 732.0)">realized gains move the Elo ratings</text>
+<rect x="64" y="1100" width="924" height="150" rx="12" class="store" stroke-width="1.6"/>
+<text x="80" y="1126" class="tt-store" font-size="15" font-weight="600">Append-only experience ledger</text>
+<text x="972" y="1126" class="muted" font-size="12" text-anchor="end">the shared store · the run dir is its own git repo · nothing is ever deleted</text>
+<rect x="78" y="1140" width="896" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="92" y="1167" font-size="12" xml:space="preserve"><tspan class="tt-store m" font-weight="600">experience/&lt;iter&gt;_&lt;name&gt;/</tspan><tspan class="muted">   design.py · design_spec.json · hypothesis.md · result.json · trace/ (heatmap.png, fields, solver.log)</tspan></text>
+<rect x="78.0" y="1194" width="171.2" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="163.6" y="1212" class="tt-store m" font-size="12" font-weight="600" text-anchor="middle">results.tsv</text>
+<text x="163.6" y="1229" class="muted" font-size="11.5" text-anchor="middle">flat timeline</text>
+<rect x="259.2" y="1194" width="171.2" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="344.79999999999995" y="1212" class="tt-store m" font-size="12" font-weight="600" text-anchor="middle">frontier.json</text>
+<text x="344.79999999999995" y="1229" class="muted" font-size="11.5" text-anchor="middle">Pareto set + best</text>
+<rect x="440.4" y="1194" width="171.2" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="526.0" y="1212" class="tt-store m" font-size="12" font-weight="600" text-anchor="middle">kg.json</text>
+<text x="526.0" y="1229" class="muted" font-size="11.5" text-anchor="middle">lineage + verdicts</text>
+<rect x="621.5999999999999" y="1194" width="171.2" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="707.1999999999999" y="1212" class="tt-store m" font-size="12" font-weight="600" text-anchor="middle">ideas/board.jsonl</text>
+<text x="707.1999999999999" y="1229" class="muted" font-size="11.5" text-anchor="middle">cards · ideas · Elo</text>
+<rect x="802.8" y="1194" width="171.2" height="44" rx="8" class="chip" stroke-width="1.1"/>
+<text x="888.4" y="1212" class="tt-store" font-size="12" font-weight="600" text-anchor="middle">git commits</text>
+<text x="888.4" y="1229" class="muted" font-size="11.5" text-anchor="middle">audit trail, never reset</text>
+<path d="M556,884 L589,884 Q598,884 598,893 L598,1099" class="ln-line" fill="none" stroke-width="1.8" marker-end="url(#ah-line)"/>
+<text x="606" y="1086" class="muted" font-size="11.5">writes</text>
+<path d="M64,1162 L49,1162 Q40,1162 40,1153 L40,433 Q40,424 49,424 L63,424" class="ln-exp" fill="none" stroke-width="2.6" marker-end="url(#ah-exp)"/>
+<path d="M64,1024.0 L41,1024.0" class="ln-exp" fill="none" stroke-width="2.6"/>
+<circle cx="40" cy="1024.0" r="4" class="dot-exp"/>
+<text x="31" y="724.0" class="exp-t" font-size="11.5" text-anchor="middle" transform="rotate(-90 31 724.0)">experience loop: repeat, never stop, never git reset</text>
+<path d="M892,1100 L892,975" class="ln-real" fill="none" stroke-width="2.2" marker-end="url(#ah-real)"/>
+<text x="900" y="1086" class="real-t" font-size="11.5">realized gains</text>
+<rect x="1008" y="1100" width="152" height="150" rx="12" class="sealed" stroke-width="1.5" stroke-dasharray="5 4"/>
+<path d="M1033,1124 v-3 a5 5 0 0 1 10 0 v3" class="lock" fill="none" stroke-width="1.6"/><rect x="1030" y="1124" width="16" height="11" rx="2" class="lockbody"/>
+<text x="1054" y="1131" class="text m" font-size="13.5" font-weight="600">.sealed/</text>
+<text x="1022" y="1160" class="muted" font-size="12">holdout scores, split</text>
+<text x="1022" y="1178" class="muted" font-size="12">off by the runner at</text>
+<text x="1022" y="1196" class="muted" font-size="12">eval; never read</text>
+<text x="1022" y="1214" class="muted" font-size="12">while searching</text>
+<text x="40" y="1290" class="sec" font-size="12.5" font-weight="600">3 · SELECTION</text>
+<rect x="500" y="1302" width="660" height="82" rx="10" class="tool" stroke-width="1.4"/>
+<rect x="1111.31640625" y="1310" width="40.68359375" height="16" rx="8" class="tag-tool"/>
+<text x="1131.658203125" y="1321.6" class="tagtext-tool" font-size="9.5" font-weight="600" text-anchor="middle">TOOL</text>
+<text x="514" y="1327" class="tt-tool m" font-size="12.5" font-weight="600">meta-research finalize --top k --pick &lt;sealed key&gt; [--weights ...]</text>
+<text x="514" y="1349" class="muted" font-size="12.5">reveals the sealed scores of the top-k candidates by search score and picks</text>
+<text x="514" y="1367" class="muted" font-size="12.5">the best on the holdout; reference points are never picked</text>
+<path d="M1084.0,1250 L1084.0,1301" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<path d="M760,1250 L760,1301" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<text x="768" y="1272" class="muted" font-size="11.5">top-k by search score</text>
+<text x="1076.0" y="1272" class="muted" font-size="11.5" text-anchor="end">revealed</text>
+<rect x="220" y="1314" width="240" height="58" rx="10" class="store" stroke-width="1.4"/>
+<text x="234" y="1338" class="tt-store m" font-size="13" font-weight="600">finalize.jsonl</text>
+<text x="234" y="1357" class="muted" font-size="12">every reveal logged; reveal rarely</text>
+<path d="M500,1343.0 L461,1343.0" class="ln-line" fill="none" stroke-width="1.6" marker-end="url(#ah-line)"/>
+<text x="40" y="1338" class="muted" font-size="12">choose the shipped</text>
+<text x="40" y="1355" class="muted" font-size="12">candidate on a split</text>
+<text x="40" y="1372" class="muted" font-size="12">the search never saw</text>
+</svg>

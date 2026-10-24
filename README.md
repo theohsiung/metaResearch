@@ -12,6 +12,14 @@ There is **no subprocess orchestrator**. No `claude_wrapper.py`, no `proposer.py
 `run` command. The framework provides only **deterministic tools** (evaluate → store → frontier
 → git). The intelligence — propose, diagnose, decide — is the agent following the skill.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/meta-research-flow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/meta-research-flow-light.svg">
+  <img src="docs/assets/meta-research-flow-light.svg" width="100%" alt="Flowchart of a meta-research run. Setup: meta-research init, the read-only prepare.py, program.md and baseline designs, then meta-research seed. The loop the agent runs in-session: inspect the experience (frontier, results.tsv, progress, kg.json, bundles; suggest, context, recall, trajectory), optionally run a Co-Scientist ideation round (generation, reflection, Elo ranking, evolution, proximity, meta-review, pick), form one falsifiable hypothesis in hyp.json, write one design, run meta-research eval (evaluator, experience bundle, frontier.json, kg.json, results.tsv, git commit; sealed holdout scores go to .sealed/), read the result and repeat. The append-only ledger feeds the next hypothesis (experience loop) and the ideas' Elo ratings through reality matches (reality loop). Selection: meta-research finalize reveals the sealed scores of the top-k candidates and logs to finalize.jsonl.">
+</picture>
+
+*How a run flows: deterministic tools (blue) store and score, the agent (purple) reasons, and the append-only ledger feeds both the next hypothesis and the ideas' ratings.*
+
 ## The fusion
 
 It fuses two ideas into one architecture:
