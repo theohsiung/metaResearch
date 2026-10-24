@@ -60,3 +60,16 @@ def test_cli(lab, capsys):  # noqa: F811
     assert json.loads(capsys.readouterr().out)["direction"] == "min"
     assert cli_main(["trajectory", "--objective", "nope"]) == 2
     assert cli_main(["trajectory", "--ref", "bad"]) == 2
+
+
+def test_rescored_scores_replace_the_ledger_and_may_name_a_new_objective(lab, capsys):  # noqa: F811
+    run, add = lab
+    _ledger(add)
+    capsys.readouterr()
+    first = sorted(p.name for p in (run / "experience").iterdir())[0]
+    (run / "rescored.json").write_text(json.dumps({first: {"pooled": 42.0, "note": "rescored"}}), encoding="utf-8")
+    assert cli_main(["trajectory", "--objective", "pooled", "--rescored", "rescored.json", "--json"]) == 0
+    points = {p["id"]: p["value"] for p in json.loads(capsys.readouterr().out)["points"]}
+    assert points[first] == 42.0 and sum(v is not None for v in points.values()) == 1
+    data = trajectory_data(run, ACC, scores={first: {"acc": 0.99}})
+    assert next(p["value"] for p in data["points"] if p["id"] == first) == 0.99

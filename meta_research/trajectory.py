@@ -36,19 +36,24 @@ def trajectory_data(
     *,
     refs: dict[str, float] | None = None,
     max_label: int = 60,
+    scores: dict[str, dict[str, float]] | None = None,
 ) -> dict[str, Any]:
     """Points, lineage edges, best-so-far steps and annotations for one objective.
 
     Edge styles: ``mutation`` (child's operator is not crossover: improve, debug, or
     unlabeled), ``crossover`` (both parents of a crossover child), ``inspiration``
     (an ``inspired_by`` pointer of a non-crossover child).
+
+    ``scores`` overrides the ledger's scores per bundle id (``{bundle: {name: value}}``, the
+    ``--rescored`` file of ``meta-research ideas``) for a run whose metric changed mid-run;
+    bundles it leaves out keep their ledger scores.
     """
     run_dir = Path(run_dir)
     kg = build_kg(run_dir)
     nodes = {n["id"]: n for n in kg["nodes"]}
     points = []
     for n in sorted(kg["nodes"], key=lambda n: (n["iteration"], n["name"])):
-        value = n["scores"].get(objective.name)
+        value = {**n["scores"], **(scores or {}).get(n["id"], {})}.get(objective.name)
         points.append({"id": n["id"], "iteration": n["iteration"], "name": n["name"], "status": n["status"],
                        "operator": n.get("operator", ""),
                        "value": value if n["status"] in FEASIBLE else None})

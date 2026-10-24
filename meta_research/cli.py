@@ -397,6 +397,18 @@ def _weights(raw: str | None) -> dict[str, float] | None:
     return weights
 
 
+def _load_rescored(raw: str | None, run_dir: Path) -> dict[str, dict[str, float]] | None:
+    """``--rescored`` JSON ``{bundle: {name: value, ...}}`` (non-numeric fields are notes); a relative path that
+    does not exist from the cwd is read from the run dir, where the file is kept beside the ledger."""
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute() and not path.exists():
+        path = run_dir / path
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    return {b: {k: float(v) for k, v in vals.items() if isinstance(v, (int, float))} for b, vals in doc.items()}
+
+
 def _fields(args: argparse.Namespace, keys: tuple[str, ...]) -> dict[str, Any]:
     """Event fields from ``--file`` JSON, overridden by the flags given on the command line."""
     fields: dict[str, Any] = {}
@@ -422,14 +434,7 @@ def cmd_ideas(args: argparse.Namespace) -> int:
     board = ib.Board(Path(args.run_dir).resolve())
     try:
         weights = _weights(getattr(args, "weights", None))
-        rescored = None
-        if getattr(args, "rescored", None):  # {bundle: {name: value, ...}}; non-numeric fields are notes
-            path = Path(args.rescored)
-            if not path.is_absolute() and not path.exists():
-                path = Path(args.run_dir) / path  # a file kept beside the ledger
-            doc = json.loads(path.read_text(encoding="utf-8"))
-            rescored = {b: {k: float(v) for k, v in vals.items() if isinstance(v, (int, float))}
-                        for b, vals in doc.items()}
+        rescored = _load_rescored(getattr(args, "rescored", None), Path(args.run_dir))
         action = args.action
         if action == "card":
             e = board.add_card(**_fields(args, ("title", "source", "technique", "claim", "conditions", "cost", "tags")))
@@ -518,7 +523,14 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
     if not objectives:
         _err(f"no frontier.json in {run_dir} — run `meta-research seed` first")
         return 2
+    try:
+        rescored = _load_rescored(args.rescored, run_dir)
+    except (OSError, ValueError) as exc:
+        _err(str(exc))
+        return 2
     objective = next((o for o in objectives if o.name == (args.objective or objectives[0].name)), None)
+    if objective is None and rescored and any(args.objective in v for v in rescored.values()):
+        objective = Objective(args.objective, direction="max")  # a rescored-only score, higher is better
     if objective is None:
         _err(f"unknown objective {args.objective!r}; known: {', '.join(o.name for o in objectives)}")
         return 2
@@ -530,7 +542,7 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
         except ValueError:
             _err(f"--ref expects LABEL=NUMBER, got {item!r}")
             return 2
-    data = trajectory_data(run_dir, objective, refs=refs)
+    data = trajectory_data(run_dir, objective, refs=refs, scores=rescored)
     if args.json:
         print(json.dumps(data, indent=2, sort_keys=True))
         return 0
@@ -927,6 +939,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_traj.add_argument("--ref", action="append", help="reference line LABEL=VALUE (repeatable)")
     p_traj.add_argument("--out", default=None, help="output PNG (default: <run dir>/trajectory.png)")
     p_traj.add_argument("--json", action="store_true", help="print the plotted data instead of drawing")
+    p_traj.add_argument("--rescored", help="JSON {bundle: {name: value}} overriding ledger scores (a changed metric); "
+                                           "--objective may then name a score that only it holds")
     add_run_dir(p_traj)
     p_traj.set_defaults(func=cmd_trajectory)
 
