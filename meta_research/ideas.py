@@ -96,6 +96,10 @@ class Board:
             out.setdefault(e["idea"], []).append(e["bundle"])
         return out
 
+    def standins(self) -> dict[str, str]:
+        """Design name -> the bundle that scored that run's model (the latest ``standin`` event wins)."""
+        return {e["name"]: e["bundle"] for e in self.of("standin")}
+
     # -- writers -------------------------------------------------------------
     def _append(self, event: dict[str, Any]) -> dict[str, Any]:
         event = {**event, "seq": len(self.events) + 1,
@@ -180,6 +184,14 @@ class Board:
         if bundle in self.links().get(idea, []):
             raise BoardError(f"{bundle} is already linked to {idea}")
         return self._append({"type": "link", "idea": idea, "bundle": bundle})
+
+    def standin(self, name: str, bundle: str) -> dict[str, Any]:
+        """Record that ``bundle`` scored the model of the run named ``name``, whose own bundle is missing or
+        failed (training finished but its scoring was cut off, and a score-only run read the saved model).
+        Realized gains of children whose ``parent`` is ``name`` are then measured against ``bundle``."""
+        if not name.strip() or not bundle.strip():
+            raise BoardError("a stand-in needs a design name and a bundle id")
+        return self._append({"type": "standin", "name": name.strip(), "bundle": bundle.strip()})
 
     def _require(self, idea: str) -> None:
         if idea not in self.ideas:
@@ -316,7 +328,8 @@ def outcomes(board: Board, *, weights: dict[str, float] | None = None,
     """Realized outcome of every idea with an evaluated bundle.
 
     A bundle tests an idea when its ``hypothesis.md`` front-matter names it (``idea`` in hyp.json)
-    or a ``link`` event says so. Its gain is the weighted relative improvement over its parent
+    or a ``link`` event says so. A parent with no bundle of its own, or a failed one, is replaced by its
+    ``standin`` (the bundle that scored its model) when the board records one. Its gain is the weighted relative improvement over its parent
     (``weights`` maps objective -> weight, default the first objective in ``frontier.json``),
     signed so that positive is better. An infeasible or crashed bundle (including an early-stopped
     run) failed. An idea keeps its best bundle.
@@ -348,9 +361,17 @@ def outcomes(board: Board, *, weights: dict[str, float] | None = None,
         for b in bundles:
             if b in by_id and by_id[b] not in tested.get(idea, []):
                 tested.setdefault(idea, []).append(by_id[b])
+    standins = {name: by_id[b] for name, b in board.standins().items() if b in by_id}
+
+    def parent_of(row: dict[str, Any]) -> dict[str, Any] | None:
+        parent = _parent_of(row, rows)
+        if (parent is None or parent["status"] in FAILED_STATUSES) and row.get("parent") in standins:
+            return standins[row["parent"]]
+        return parent
+
     out = {}
     for idea, bundles in tested.items():
-        results = [_outcome(r, _parent_of(r, rows), weights, objectives) for r in bundles]
+        results = [_outcome(r, parent_of(r), weights, objectives) for r in bundles]
         scored = [x for x in results if x["gain"] is not None]
         failed = [x for x in results if x["failed"]]
         best = max(scored, key=lambda x: x["gain"]) if scored else (failed[0] if failed else results[0])

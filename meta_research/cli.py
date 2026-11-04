@@ -9,7 +9,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research frontier [--run-dir DIR]
     meta-research kg [--run-dir DIR]
     meta-research calibration [--run-dir DIR]
-    meta-research ideas <card|cards|add|review|schedule|match|rank|proximity|link|sync|stats|digest|metareview>
+    meta-research ideas <card|cards|add|review|schedule|match|rank|proximity|standin|link|sync|stats|digest|metareview>
     meta-research progress [--out DIR] [--run-dir DIR]
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
@@ -527,6 +527,9 @@ def cmd_ideas(args: argparse.Namespace) -> int:
                 print("  " + ", ".join(f"{i} {board.ideas[i]['title']}" for i in cluster))
             for d in graph["duplicates"]:
                 print(logfmt.yellow(f"  near-duplicates: {d['a']} ~ {d['b']} ({d['similarity']:.2f})"))
+        elif action == "standin":
+            board.standin(args.name, args.bundle)
+            print(f"parent {args.name} -> experience/{args.bundle}")
         elif action == "link":
             board.link(args.idea, args.bundle)
             print(f"{args.idea} <- experience/{args.bundle}")
@@ -957,6 +960,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--threshold", type=float, default=0.3)
     p.add_argument("--duplicate", type=float, default=0.75)
     p.add_argument("--json", action="store_true")
+    p = act("standin", "name the bundle that scored a run's model when that run's own bundle is missing or failed")
+    p.add_argument("name", help="design name a hypothesis names as parent, e.g. d7_all_pools")
+    p.add_argument("bundle", help="experience/ bundle id that scored its model, e.g. 029_d7_score")
     p = act("link", "mark an evaluated bundle as the test of an idea")
     p.add_argument("idea")
     p.add_argument("bundle", help="experience/ bundle id, e.g. 012_d1_same_skill_data")

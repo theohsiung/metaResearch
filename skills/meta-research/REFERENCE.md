@@ -388,6 +388,9 @@ reality match between every pair of tested ideas:
   `--weights`, the gain is on the first objective.
 - Crashed and infeasible runs, including early-stopped ones, lose.
 - Reality matches move ratings by K=64, against 32 for a judged match.
+- A child whose parent has no scored bundle (its training finished but its scoring was cut
+  off, and a score-only run read the saved model later) has no gain until you record
+  `ideas standin PARENT_NAME BUNDLE`: gains are then measured against that bundle.
 
 Tested ideas then act as anchors: their ratings follow real outcomes, and `schedule`
 pairs new ideas against them.

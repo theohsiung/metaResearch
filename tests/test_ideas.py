@@ -247,6 +247,19 @@ def test_directed_ideas_wait_for_evaluation_and_play_reality_matches(lab):  # no
     assert elo(Board(run))[directed]["elo"] > INITIAL_ELO
 
 
+def test_a_standin_scores_a_parent_whose_own_bundle_is_missing(lab, capsys):  # noqa: F811
+    run, add = lab
+    board = Board(run)
+    i = _idea(board, "class balancing", origin="directed", strategy="user")
+    add("trained_score", {"acc": 0.80, "cost": 5.0})  # the score-only run of "trained", whose bundle never landed
+    add("balanced", {"acc": 0.84, "cost": 5.0}, parent="trained", idea=i)
+    assert outcomes(Board(run))[i]["gain"] is None
+    scored = max(p.name for p in (run / "experience").glob("*_trained_score"))
+    assert cli_main(["ideas", "standin", "trained", scored, "--run-dir", str(run)]) == 0
+    out = outcomes(Board(run))[i]
+    assert out["gain"] == pytest.approx(0.05) and out["parent"].endswith("_trained_score")
+
+
 def _gated_lab(lab, minutes):  # noqa: F811
     run, _ = lab
     with open(run / "prepare.py", "a", encoding="utf-8") as fh:
