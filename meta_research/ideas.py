@@ -41,7 +41,9 @@ K_REALITY = 64.0
 
 REVIEW_KINDS = ("initial", "full", "deep", "observation", "simulation", "tournament")
 VERDICTS = ("pass", "revise", "fail")
-ORIGINS = ("generation", "evolution")
+#: ``directed``: a direction the user or an audit chose outside a tournament (a gap analysis, a failure found in a
+#: result). It is never judged, so it is not scheduled, but its evaluated bundle still plays reality matches.
+ORIGINS = ("generation", "evolution", "directed")
 #: Generation and Evolution strategies named in the paper (free text is allowed too).
 STRATEGIES = ("literature", "debate", "assumptions", "expansion",
               "grounding", "feasibility", "inspiration", "combination", "simplification", "out-of-box")
@@ -210,12 +212,13 @@ def elo(board: Board) -> dict[str, dict[str, Any]]:
 
 
 def status(board: Board, idea: str, tested: set[str] | None = None) -> str:
-    """``tested`` once evaluated, else the latest review verdict (``new`` before any review)."""
+    """``tested`` once evaluated, else the latest review verdict (``new`` before any review; ``directed`` for an
+    unreviewed directed idea, which waits for its evaluation rather than for the tournament)."""
     if tested is not None and idea in tested:
         return "tested"
     reviews = board.reviews(idea)
     if not reviews:
-        return "new"
+        return "directed" if board.ideas[idea].get("origin") == "directed" else "new"
     return {"pass": "active", "revise": "revise", "fail": "rejected"}[reviews[-1]["verdict"]]
 
 

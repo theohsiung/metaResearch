@@ -54,7 +54,12 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    - an Elo tournament, plus evolution and a meta-review.
 
    Then take the top untested idea from `meta-research ideas rank` and name it in
-   hyp.json's `idea`.
+   hyp.json's `idea`. When the user or an audit of a result picks the direction instead,
+   record it first with `meta-research ideas add --origin directed --strategy user|audit`
+   and name that idea: it skips the tournament, but its outcome still moves the Elo
+   ratings. If `prepare.py` declares `EVAL_MINUTES` at or above `IDEA_GATE_MINUTES`
+   (default 60), `eval` refuses a hypothesis without a board idea unless you pass
+   `--no-idea REASON`.
 3. **Write `designs/<name>.py`**: copy a frontier design and change exactly **one
    mechanism**. Dry-run first (mandatory prototype): import the module, call
    `build()`, sanity-check params fit the envelope / pass obvious feasibility before

@@ -362,6 +362,21 @@ arXiv:2502.18864). You play its agents; `meta-research ideas` keeps the board in
    `hyp.json`, which stores it in the `hypothesis.md` front-matter. For candidates
    evaluated before the board existed, run `ideas link ID BUNDLE`.
 
+**Directed ideas.** Not every expensive run comes out of a round: the user picks a direction,
+or an audit of a result finds the failure to fix (a data source that teaches the wrong label,
+a missed pool). Record it before the run with
+`ideas add --origin directed --strategy user|audit --title T --statement "..." --cites BUNDLE`
+and name it in `hyp.json`. A directed idea is never reviewed or judged (`status` shows
+`directed`, and `schedule` leaves it out), but `ideas sync` plays its reality matches like any
+tested idea. So the Elo ratings, the concordance and `ideas stats` (per `origin:strategy`) keep
+counting every expensive outcome, and show whether directed choices beat the tournament's.
+
+**The idea gate.** `prepare.py` may declare `EVAL_MINUTES`, the cost of one evaluation, and
+`IDEA_GATE_MINUTES` (default 60). From that cost on, `meta-research eval` refuses a hypothesis
+that names no board idea, and an `idea` that is not on the board is always refused. For runs
+that test no idea (a re-score, a smoke test), pass `--no-idea REASON`: the reason is written at
+the head of the bundle's reasoning.
+
 **Independent judges.** A context that wrote an idea favours it when it reviews or judges
 it. If the runtime has subagents (Claude Code's Agent tool), give each review and each
 match to a fresh subagent with only the idea texts, `program.md` and the cards and bundles

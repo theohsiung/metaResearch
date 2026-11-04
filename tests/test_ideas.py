@@ -228,3 +228,55 @@ def test_cli_round_trip(tmp_path, capsys):
     for action in (["proximity"], ["digest"], ["cards", "t"], ["sync"]):
         assert cli_main(["ideas", *action, "--run-dir", run]) == 0
     assert (tmp_path / "ideas" / "board.jsonl").is_file()
+
+
+def test_directed_ideas_wait_for_evaluation_and_play_reality_matches(lab):  # noqa: F811
+    run, add = lab
+    board = Board(run)
+    judged = _idea(board, "more same-skill data")
+    board.add_review(judged, kind="initial", verdict="pass")
+    directed = _idea(board, "drop the generator rows that teach the wrong label", origin="directed", strategy="audit")
+    assert status(board, directed) == "directed"
+    assert all(directed not in (m["a"], m["b"]) for m in schedule(board, n=4))  # never judged
+    add("base", {"acc": 0.80, "cost": 5.0})
+    add("data", {"acc": 0.82, "cost": 5.0}, parent="base", idea=judged)
+    add("fix", {"acc": 0.86, "cost": 5.0}, parent="base", idea=directed)
+    board = Board(run)
+    played = sync(board)
+    assert [(m["a"], m["b"], m["winner"]) for m in played] == [(judged, directed, directed)]
+    assert elo(Board(run))[directed]["elo"] > INITIAL_ELO
+
+
+def _gated_lab(lab, minutes):  # noqa: F811
+    run, _ = lab
+    with open(run / "prepare.py", "a", encoding="utf-8") as fh:
+        fh.write(f"\nEVAL_MINUTES = {minutes}\n")
+    (run / "designs" / "cand.py").write_text(
+        "from meta_research import DesignSpec\n\n\ndef build():\n"
+        "    return DesignSpec(params={'acc': 0.81, 'cost': 5.0})\n", encoding="utf-8")
+    return run
+
+
+def _hyp(run, **kw):
+    path = run / "hyp.json"
+    path.write_text(json.dumps({"axis": "test", "change": "c", "reasoning": "why", **kw}), encoding="utf-8")
+    return str(path)
+
+
+def test_expensive_evaluations_must_name_a_board_idea(lab, capsys):  # noqa: F811
+    run = _gated_lab(lab, 120)
+    assert cli_main(["eval", "cand", "--hypothesis", _hyp(run), "--run-dir", str(run)]) == 2
+    assert "EVAL_MINUTES" in capsys.readouterr().err
+    assert cli_main(["eval", "cand", "--hypothesis", _hyp(run, idea="i007"), "--run-dir", str(run)]) == 2
+    assert "not on ideas/board.jsonl" in capsys.readouterr().err
+    i = Board(run).add_idea(title="directed fix", statement="s", origin="directed", strategy="user")["id"]
+    assert cli_main(["eval", "cand", "--hypothesis", _hyp(run, idea=i), "--run-dir", str(run)]) == 0
+    assert cli_main(["eval", "cand", "--hypothesis", _hyp(run), "--no-idea", "rescore only",
+                     "--run-dir", str(run)]) == 0
+    bundles = sorted((run / "experience").glob("*_cand/hypothesis.md"))
+    assert f"idea: {i}" in bundles[0].read_text() and "(no idea: rescore only)" in bundles[-1].read_text()
+
+
+def test_cheap_evaluations_need_no_idea(lab):  # noqa: F811
+    run = _gated_lab(lab, 5)
+    assert cli_main(["eval", "cand", "--hypothesis", _hyp(run), "--run-dir", str(run)]) == 0

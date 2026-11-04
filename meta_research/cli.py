@@ -128,6 +128,36 @@ def _load_hypothesis(path: str | None) -> dict[str, Any] | None:
     return data
 
 
+#: Default for ``prepare.IDEA_GATE_MINUTES``: from this evaluation cost on, a design must name the idea it tests.
+IDEA_GATE_MINUTES = 60
+
+
+def _idea_gate(experiment: ModuleType, run_dir: Path, hypothesis: dict[str, Any] | None,
+               no_idea: str | None) -> str | None:
+    """Why this evaluation may not run, or None.
+
+    A named idea must be on the board. When ``prepare.EVAL_MINUTES`` (one evaluation's cost) reaches
+    ``prepare.IDEA_GATE_MINUTES`` (default 60), the hypothesis must name one: an expensive run should come
+    from an ideation round, or from a direction recorded as a ``directed`` idea, so its outcome reaches the
+    Elo ratings through reality matches. ``--no-idea REASON`` skips the requirement and records the reason.
+    """
+    from . import ideas as ib
+
+    idea = (hypothesis or {}).get("idea")
+    if idea:
+        if idea not in ib.Board(run_dir).ideas:
+            return (f"the hypothesis names idea {idea}, which is not on {ib.BOARD_DIRNAME}/{ib.BOARD_FILENAME}; "
+                    "add it first (meta-research ideas add ...)")
+        return None
+    minutes = getattr(experiment, "EVAL_MINUTES", None)
+    gate = getattr(experiment, "IDEA_GATE_MINUTES", IDEA_GATE_MINUTES)
+    if minutes is None or minutes < gate or no_idea:
+        return None
+    return (f"one evaluation costs about {minutes:g} min (prepare.EVAL_MINUTES >= IDEA_GATE_MINUTES = {gate:g}): "
+            "name the idea this design tests in hyp.json ('idea'), from an ideation round or recorded with "
+            "'meta-research ideas add --origin directed', or pass --no-idea REASON")
+
+
 def _objective_value(result: EvalResult, obj: Objective) -> str:
     value = result.scores.get(obj.name)
     if value is None:
@@ -196,6 +226,13 @@ def cmd_eval(args: argparse.Namespace) -> int:
     except (FileNotFoundError, ImportError, AttributeError, ValueError) as exc:
         _err(str(exc))
         return 2
+
+    problem = _idea_gate(experiment, run_dir, hypothesis, getattr(args, "no_idea", None))
+    if problem:
+        _err(problem)
+        return 2
+    if hypothesis is not None and getattr(args, "no_idea", None) and not hypothesis.get("idea"):
+        hypothesis = {**hypothesis, "reasoning": f"(no idea: {args.no_idea}) {hypothesis.get('reasoning') or ''}".strip()}
 
     objectives = list(experiment.OBJECTIVES)
     result = evaluate_and_record(
@@ -818,6 +855,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument("--commit", action="store_true", help="commit the bundle (append-only)")
     p_eval.add_argument("--tag", default=None, help="run tag -> branch meta-research/<tag>")
     p_eval.add_argument("--hypothesis", default=None, help="path to hypothesis hand-off JSON")
+    p_eval.add_argument("--no-idea", metavar="REASON", default=None,
+                        help="run an expensive evaluation without a board idea (the reason is recorded)")
     add_run_dir(p_eval)
     p_eval.set_defaults(func=cmd_eval)
 
@@ -883,11 +922,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = act("cards", "list or search (BM25) the literature cards")
     p.add_argument("query", nargs="?", default="")
     p.add_argument("-k", type=int, default=10)
-    p = act("add", "add an idea (Generation), or an evolved one with --origin evolution --parents")
+    p = act("add", "add an idea (Generation), an evolved one (--origin evolution --parents) or a direction the "
+                   "user or an audit chose (--origin directed --strategy user|audit)")
     p.add_argument("--file", help="JSON object with the fields below")
     for flag in ("title", "statement", "change", "strategy", "parents", "cites", "tags"):
         p.add_argument(f"--{flag}")
-    p.add_argument("--origin", choices=["generation", "evolution"])
+    p.add_argument("--origin", choices=["generation", "evolution", "directed"])
     p.add_argument("--duplicate", type=float, default=0.75, help="similarity that flags a near-duplicate")
     p = act("review", "record a Reflection review of an idea")
     p.add_argument("idea")
