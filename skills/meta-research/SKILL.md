@@ -28,6 +28,10 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    ones you may use and when (windows, deadlines, shared-service limits). Before every
    expensive evaluation, run `meta-research resources show` and
    `meta-research resources check`, and run only where and when they allow (REFERENCE.md §5e).
+1c. **Give the user a page to browse.** `meta-research ui [--rescored F --weights W --objective O]`
+   writes `research.html`: the trajectory per objective with lineage, and the idea
+   tournament, each point or idea clickable for its record. Regenerate it after each
+   result or ideation round. If you published it as an Artifact, republish to the same URL.
 2. Agree a run tag and seed the population: `meta-research seed --commit`. This
    evaluates every baseline once, populating `results.tsv`, `frontier.json`,
    `experience/`.

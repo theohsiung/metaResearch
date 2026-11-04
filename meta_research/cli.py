@@ -594,6 +594,45 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    """`meta-research ui` — one self-contained HTML page: trajectory per objective + the idea tournament."""
+    from .suggest import objectives_from_frontier
+    from .ui import UI_FILENAME, render_ui, ui_data
+
+    run_dir = Path(args.run_dir).resolve()
+    try:
+        rescored = _load_rescored(args.rescored, run_dir)
+        weights = _weights(args.weights)
+    except (OSError, ValueError) as exc:
+        _err(str(exc))
+        return 2
+    refs = {}
+    for item in args.ref or []:
+        label, _, value = item.partition("=")
+        try:
+            refs[label] = float(value)
+        except ValueError:
+            _err(f"--ref expects LABEL=NUMBER, got {item!r}")
+            return 2
+    objectives = list(objectives_from_frontier(run_dir) or [])
+    known = {o.name for o in objectives}
+    extra = sorted({k for v in (rescored or {}).values() for k in v} - known)
+    objectives = [Objective(k, direction="max") for k in extra] + objectives  # a rescored metric is the one to read
+    if args.objective:
+        first = [o for o in objectives if o.name == args.objective]
+        if not first:
+            _err(f"unknown objective {args.objective!r}; known: {', '.join(o.name for o in objectives)}")
+            return 2
+        objectives = first + [o for o in objectives if o.name != args.objective]
+    data = ui_data(run_dir, objectives, refs=refs, scores=rescored, weights=weights, title=args.title)
+    path = render_ui(data, Path(args.out) if args.out else run_dir / UI_FILENAME)
+    t = data["tournament"]
+    print(logfmt.bold(f"wrote {path}"))
+    print(logfmt.dim(f"  {len(data['runs'])} runs, {len(objectives)} objective view(s)"
+                     + (f", {len(t['ideas'])} ideas, {len(t['matches'])} matches" if t else ", no idea board")))
+    return 0
+
+
 def cmd_kg(args: argparse.Namespace) -> int:
     """`meta-research kg` — rebuild the derived knowledge graph (DESIGN §7.6).
 
@@ -1072,6 +1111,17 @@ def build_parser() -> argparse.ArgumentParser:
                                            "--objective may then name a score that only it holds")
     add_run_dir(p_traj)
     p_traj.set_defaults(func=cmd_trajectory)
+
+    p_ui = sub.add_parser("ui", help="write research.html: an interactive page with the trajectory and the tournament")
+    p_ui.add_argument("--out", default=None, help="output HTML (default: <run dir>/research.html)")
+    p_ui.add_argument("--ref", action="append", help="reference line LABEL=VALUE on the trajectory (repeatable)")
+    p_ui.add_argument("--rescored", help="JSON {bundle: {name: value}} overriding ledger scores; its names become "
+                                         "extra objectives (higher is better)")
+    p_ui.add_argument("--weights", help="name=weight pairs for realized gains (as in `ideas rank`)")
+    p_ui.add_argument("--title", default=None, help="page title (default: the run dir's name)")
+    p_ui.add_argument("--objective", default=None, help="objective shown first (default: first rescored, else first)")
+    add_run_dir(p_ui)
+    p_ui.set_defaults(func=cmd_ui)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)
