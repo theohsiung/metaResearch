@@ -410,6 +410,26 @@ Two settings keep reality matches honest:
   keep a JSON beside it with each bundle's re-scored values (`{bundle: {name: value}}`),
   and pass it to `sync`, `rank`, `stats` and `schedule`.
 
+## 5e. Compute resources (`resources.json`)
+
+The `meta-research-setup` skill writes `resources.json` (and a human `resources.md`) in the
+experiment dir. It records:
+- the hosts with their accelerators, containers and paths;
+- availability windows, including ones that cross midnight;
+- deadlines with a stop time that leaves room to checkpoint;
+- shared services with their concurrency limits;
+- the actions the user wants to approve first.
+
+Three deterministic tools read it:
+
+| command | what it does |
+|---|---|
+| `meta-research resources probe [--host user@host] [--path P] [--endpoint URL] [--json]` | One shell probe, local or a single ssh call: CPUs, RAM, free disk, GPUs (`nvidia-smi` or `rocm-smi`), docker images, the video/render group ids, and whether model endpoints answer. A missing tool is recorded as absent, never an error. |
+| `meta-research resources check [--host NAME]` | On each host, checks that `required_paths` exist, that `executables` are executable and that `min_free_gb` holds; exits 1 on any failure. Run it before launching on a host: it catches a copy that broke off, or a launcher that lost its executable bit, before the run does. |
+| `meta-research resources show [--host NAME]` | Which hosts and services are usable now (local time), each host's next stop time, and what needs the user's approval. |
+
+When the user's hardware changes, update the file, re-run `check` and commit it with the ledger.
+
 ## 6. Swapping the evaluator (configuration-as-code, in `prepare.py`)
 
 The `Evaluator` is the generality hinge. Selecting numerical → surrogate → API is

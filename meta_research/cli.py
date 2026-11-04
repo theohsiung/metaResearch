@@ -11,6 +11,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research calibration [--run-dir DIR]
     meta-research ideas <card|cards|add|review|schedule|match|rank|proximity|standin|link|sync|stats|digest|metareview>
     meta-research progress [--out DIR] [--run-dir DIR]
+    meta-research resources <probe|check|show>
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
 The experiment is discovered from the working directory (autoresearch style):
@@ -741,12 +742,14 @@ def _copy_skill_into(target: Path) -> bool:
     skill = _packaged_skill_dir()
     if skill is None:
         return False
-    dst = target / ".claude" / "skills" / "meta-research"
-    dst.mkdir(parents=True, exist_ok=True)
-    for fname in ("SKILL.md", "REFERENCE.md"):
-        src = skill / fname
-        if src.is_file():
-            shutil.copyfile(src, dst / fname)
+    for name in ("meta-research", "meta-research-setup"):
+        src_dir = skill.parent / name
+        dst = target / ".claude" / "skills" / name
+        dst.mkdir(parents=True, exist_ok=True)
+        for fname in ("SKILL.md", "REFERENCE.md"):
+            src = src_dir / fname
+            if src.is_file():
+                shutil.copyfile(src, dst / fname)
     return True
 
 
@@ -832,6 +835,86 @@ def cmd_init(args: argparse.Namespace) -> int:
     nxt = "review prepare.py, then `meta-research seed`" if from_example else \
         "edit prepare.py (OBJECTIVES, OPERATING, make_evaluator), then `meta-research seed`"
     print(logfmt.dim(f"  next: cd {target.name} && {nxt}"))
+    print(logfmt.dim("  compute: before the first run, use the meta-research-setup skill to record the machines "
+                     "you may use (resources.json)"))
+    return 0
+
+
+def cmd_resources(args: argparse.Namespace) -> int:
+    """`meta-research resources probe|check|show` — facts about the machines; the agent decides where to run."""
+    import datetime as dt
+
+    from . import resources
+
+    if args.action == "probe":
+        try:
+            info = resources.parse_probe(resources.run_probe(args.host, args.path or None))
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            _err(str(exc))
+            return 1
+        info["host"] = args.host
+        info["endpoints"] = [resources.endpoint_up(u) for u in args.endpoint]
+        if args.json:
+            print(json.dumps(info, indent=2))
+            return 0
+        print(f"{info['hostname']} ({args.host or 'local'}): {info['cpus']} CPUs, {info['ram_gb']} GB RAM")
+        for g in info["accelerators"] or [{"name": "no GPU found"}]:
+            mem = (f", {g.get('memory_gb')} GB ({g.get('used_gb')} used, {g.get('util_pct')}% busy)"
+                   if g.get("memory_gb") else "")
+            print(f"  gpu  {g.get('name')}{mem}")
+        for d in info["disk"]:
+            print(f"  disk {d['mount']}: {d['free_gb']} GB free of {d['size_gb']}")
+        print(f"  docker: {', '.join(info['docker_images'][:5]) or 'none'}; group ids: {info['group_gids'] or 'none'}")
+        for e in info["endpoints"]:
+            print(f"  endpoint {e['url']}: " + ("up " + ", ".join(map(str, e["models"])) if e["up"]
+                                                else f"DOWN ({e['error']})"))
+        return 0
+
+    path = Path(args.resources) if args.resources else Path(args.run_dir) / "resources.json"
+    if not path.is_file():
+        _err(f"no {path}: run the meta-research-setup skill first")
+        return 2
+    try:
+        res = resources.load(path)
+    except ValueError as exc:
+        _err(str(exc))
+        return 2
+    hosts = [h for h in res["hosts"] if args.host in (None, h["name"])]
+    if not hosts:
+        _err(f"no host named {args.host!r} in {path}")
+        return 2
+    if args.action == "check":
+        failed = 0
+        for h in hosts:
+            print(logfmt.bold(f"{h['name']} ({h.get('ssh') or 'local'})"))
+            for kind, item, ok, detail in resources.run_check(h):
+                failed += not ok
+                mark = logfmt.green("ok  ") if ok else logfmt.red("FAIL")
+                shown = detail if (not ok or kind == "free disk") else ""
+                print(f"  {mark} {kind:<11} {item}  {shown}".rstrip())
+        print(logfmt.red(f"{failed} check(s) failed") if failed else logfmt.green("all checks passed"))
+        return 1 if failed else 0
+
+    now = dt.datetime.now()
+    print(f"now {now:%a %H:%M} (local time)")
+    for h in hosts:
+        gpus = ", ".join(sorted({str(g.get("name")) for g in h.get("accelerators", [])})) or "no GPU listed"
+        n = len(h.get("accelerators", []))
+        state = (logfmt.green("available now") if resources.available(h, now)
+                 else logfmt.yellow("outside its windows"))
+        print(f"{h['name']:<14} {state}  {n} x {gpus}  ({h.get('ssh') or 'local'})")
+        for w in h.get("windows", []):
+            print(logfmt.dim(f"    window {w.get('days', 'all')} {w['start']}-{w['end']} {w.get('note', '')}"))
+        stop = resources.next_stop(h, now)
+        if stop:
+            print(f"    next stop {stop[0]}: {stop[1]}")
+        if h.get("container"):
+            print(logfmt.dim(f"    container {h['container'].get('image')} via {h['container'].get('run')}"))
+    for s in res.get("services", []):
+        state = "available now" if resources.available(s, now) else "outside its windows"
+        print(f"service {s['name']}: {s['url']}, max {s.get('max_concurrency', '?')} concurrent, {state}")
+    if res.get("confirm_before"):
+        print("ask the user before: " + "; ".join(res["confirm_before"]))
     return 0
 
 
@@ -1004,6 +1087,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_prog.add_argument("--out", default=None, help="output dir for PNGs (default: run dir)")
     add_run_dir(p_prog)
     p_prog.set_defaults(func=cmd_progress)
+
+    p_res = sub.add_parser("resources", help="compute resources: probe a machine, check hosts, show what is usable now")
+    racts = p_res.add_subparsers(dest="action", required=True)
+    p = racts.add_parser("probe", help="GPUs, CPU, RAM, disk, docker and group ids of this machine or one ssh host")
+    p.add_argument("--host", default=None, help="user@host to probe over one ssh call (default: this machine)")
+    p.add_argument("--path", action="append", default=[], help="report free disk at this path (repeatable)")
+    p.add_argument("--endpoint", action="append", default=[], help="check that URL/v1/models answers (repeatable)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_resources)
+    for name, text in (("check", "verify required paths, executable bits and free disk on every host"),
+                       ("show", "summarise resources.json and mark what is usable now")):
+        p = racts.add_parser(name, help=text)
+        p.add_argument("--resources", default=None, help="resources.json (default: <run-dir>/resources.json)")
+        p.add_argument("--host", default=None, help="only this host name")
+        add_run_dir(p)
+        p.set_defaults(func=cmd_resources)
 
     p_init = sub.add_parser("init", help="scaffold a new experiment dir (git + skill ready)")
     p_init.add_argument("name", help="experiment directory name to create")

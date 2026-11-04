@@ -23,6 +23,11 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
 1. Read `program.md` (the domain "program") and `prepare.py` (OBJECTIVES, BUDGET,
    OPERATING, BASELINES, `make_evaluator()`). These fixed files are **read-only**;
    `designs/<name>.py` is your only write target.
+1b. **Know your compute.** If the experiment dir has no `resources.json`, run the
+   `meta-research-setup` skill first: it probes the machines and asks the user which
+   ones you may use and when (windows, deadlines, shared-service limits). Before every
+   expensive evaluation, run `meta-research resources show` and
+   `meta-research resources check`, and run only where and when they allow (REFERENCE.md §5e).
 2. Agree a run tag and seed the population: `meta-research seed --commit`. This
    evaluates every baseline once, populating `results.tsv`, `frontier.json`,
    `experience/`.

@@ -55,6 +55,7 @@ def test_init_stub_scaffolds_files_skill_and_git(tmp_path: Path) -> None:
     # skill copied so Claude Code loads it in-dir
     assert (target / ".claude" / "skills" / "meta-research" / "SKILL.md").is_file()
     assert (target / ".claude" / "skills" / "meta-research" / "REFERENCE.md").is_file()
+    assert (target / ".claude" / "skills" / "meta-research-setup" / "SKILL.md").is_file()
     # git initialized with an initial commit (append-only ledger live immediately)
     assert (target / ".git").is_dir()
     assert _has_commit(target)
