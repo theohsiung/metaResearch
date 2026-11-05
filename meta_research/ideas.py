@@ -96,6 +96,13 @@ class Board:
             out.setdefault(e["idea"], []).append(e["bundle"])
         return out
 
+    def starts(self) -> dict[str, list[dict[str, Any]]]:
+        """Idea -> the runs started to test it (``start`` events), oldest first."""
+        out: dict[str, list[dict[str, Any]]] = {}
+        for e in self.of("start"):
+            out.setdefault(e["idea"], []).append(e)
+        return out
+
     def standins(self) -> dict[str, str]:
         """Design name -> the bundle that scored that run's model (the latest ``standin`` event wins)."""
         return {e["name"]: e["bundle"] for e in self.of("standin")}
@@ -185,6 +192,15 @@ class Board:
             raise BoardError(f"{bundle} is already linked to {idea}")
         return self._append({"type": "link", "idea": idea, "bundle": bundle})
 
+    def start(self, idea: str, run: str, *, where: str = "", note: str = "") -> dict[str, Any]:
+        """Record that a run testing ``idea`` was launched (design ``run``, on ``where``). The idea is ``running``
+        until a bundle tests it, and leaves the tournament: reality will rate it."""
+        self._require(idea)
+        if not run.strip():
+            raise BoardError("a start needs the run's design name")
+        return self._append({"type": "start", "idea": idea, "run": run.strip(), "where": where.strip(),
+                             "note": note.strip()})
+
     def standin(self, name: str, bundle: str) -> dict[str, Any]:
         """Record that ``bundle`` scored the model of the run named ``name``, whose own bundle is missing or
         failed (training finished but its scoring was cut off, and a score-only run read the saved model).
@@ -224,10 +240,13 @@ def elo(board: Board) -> dict[str, dict[str, Any]]:
 
 
 def status(board: Board, idea: str, tested: set[str] | None = None) -> str:
-    """``tested`` once evaluated, else the latest review verdict (``new`` before any review; ``directed`` for an
-    unreviewed directed idea, which waits for its evaluation rather than for the tournament)."""
+    """``tested`` once evaluated, ``running`` once a run testing it was started, else the latest review verdict
+    (``new`` before any review; ``directed`` for an unreviewed directed idea, which waits for its evaluation rather
+    than for the tournament)."""
     if tested is not None and idea in tested:
         return "tested"
+    if idea in board.starts():
+        return "running"
     reviews = board.reviews(idea)
     if not reviews:
         return "directed" if board.ideas[idea].get("origin") == "directed" else "new"

@@ -51,6 +51,10 @@ def test_data_joins_runs_views_and_tournament(lab):  # noqa: F811
     assert rows["i002"]["wins"] == 1 and rows["i001"]["runs"] == ["002_wider"]
     assert rows["i001"]["reviews"][0]["verdict"] == "pass" and rows["i002"]["parents"] == ["i001"]
     assert t["matches"][0]["rationale"] == "the merge keeps both gains"
+    ib.Board(run).start("i002", "merge_run", where="box2")
+    rows = {r["id"]: r for r in ui_data(run, [ACC])["tournament"]["ideas"]}
+    assert rows["i002"]["status"] == "running" and rows["i002"]["started"][0]["where"] == "box2"
+    assert rows["i001"]["started"] == []
 
 
 def test_render_is_self_contained_and_escapes_script_tags(lab, tmp_path):  # noqa: F811

@@ -54,10 +54,13 @@ def ui_data(run_dir: Path | str, objectives: list[Objective], *, refs: dict[str,
     if board:
         rows = ib.rank(board, weights=weights, scores=scores)
         ideas = board.ideas
+        starts = board.starts()
         for row in rows:
             idea = ideas[row["id"]]
+            tested_by_bundle = sorted({*links.get(row["id"], []), *(rid for rid, r in runs.items() if r["idea"] == row["id"])})
             row.update(statement=idea.get("statement", ""), change=idea.get("change", ""),
-                       tags=idea.get("tags", []), at=idea.get("at"), runs=links.get(row["id"], []),
+                       tags=idea.get("tags", []), at=idea.get("at"), runs=tested_by_bundle,
+                       started=[{k: s.get(k) for k in ("run", "where", "note", "at")} for s in starts.get(row["id"], [])],
                        reviews=[{k: r.get(k) for k in ("kind", "verdict", "scores", "critique", "at")}
                                 for r in board.reviews(row["id"])])
         cards = {c: {"title": v.get("title"), "source": v.get("source"), "technique": v.get("technique")}
@@ -202,6 +205,13 @@ h3 { font: 600 11px/1.3 var(--body); text-transform: uppercase; letter-spacing: 
 .chip { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: var(--soft); color: var(--muted) }
 .chip.tested, .chip.pass { background: var(--accent-soft); color: var(--accent) }
 .chip.active { background: var(--soft); color: var(--ink) }
+.chip.running { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn) }
+.sections { display: flex; flex-direction: column; gap: 22px }
+.sections h2 { display: flex; align-items: baseline; gap: 8px }
+.sections .count { font: 600 12px var(--mono); color: var(--muted); background: var(--soft); border-radius: 10px; padding: 1px 8px }
+.sections section > .meta { margin: 0 0 6px }
+.sections details summary { font-weight: 500 }
+.pos { color: var(--win); font-weight: 600 } .neg { color: var(--loss); font-weight: 600 }
 .chip.fail, .chip.rejected, .chip.failed { background: color-mix(in srgb, var(--loss) 15%, transparent); color: var(--loss) }
 .chip.revise { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent) }
 .link { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; background: none; border: 0; padding: 0; font: inherit }
@@ -237,10 +247,27 @@ details summary { cursor: pointer; color: var(--muted) }
     <aside class="card detail" id="run-detail"><p class="empty">Click a point to see that candidate: its scores, the change it made, its lineage and its hypothesis.</p></aside>
   </section>
   <section id="v-tournament" class="grid" hidden>
-    <div class="card">
-      <div class="toolbar"><label>Show <select id="filter"><option value="all">all ideas</option><option value="active">active</option><option value="tested">tested</option><option value="rejected">rejected</option></select></label><span id="tcount"></span></div>
-      <div class="tablewrap"><table><thead><tr><th>#</th><th>Idea</th><th>Elo</th><th>W–L</th><th>Status</th><th>Gain</th></tr></thead><tbody id="rows"></tbody></table></div>
-      <details style="margin-top:14px"><summary>Latest meta-review</summary><div class="prose" id="metareview"></div></details>
+    <div class="card sections">
+      <section>
+        <h2>Running <span class="count" id="n-running"></span></h2>
+        <p class="meta">Launched and waiting for results. They have left the tournament: their real outcome will rate them.</p>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Run</th><th>Where</th><th>Started</th><th>Elo</th></tr></thead><tbody id="rows-running"></tbody></table></div>
+      </section>
+      <section>
+        <h2>Up next <span class="count" id="n-next"></span></h2>
+        <p class="meta">Not started yet, best tournament rating first. Reviewed ones passed; unreviewed and directed ones are marked.</p>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th>Idea</th><th>Elo</th><th>W–L</th><th>Reviews</th></tr></thead><tbody id="rows-next"></tbody></table></div>
+      </section>
+      <section>
+        <h2>Done <span class="count" id="n-done"></span></h2>
+        <p class="meta">Tested. The gain is the realized change of the tested run over its parent.</p>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Tested by</th><th>Gain</th><th>Elo</th><th>W–L</th></tr></thead><tbody id="rows-done"></tbody></table></div>
+      </section>
+      <details><summary>Needs revision <span id="n-revise"></span></summary>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>What the reviewers asked</th></tr></thead><tbody id="rows-revise"></tbody></table></div></details>
+      <details><summary>Rejected <span id="n-rejected"></span></summary>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>Why</th></tr></thead><tbody id="rows-rejected"></tbody></table></div></details>
+      <details><summary>Latest meta-review</summary><div class="prose" id="metareview"></div></details>
     </div>
     <aside class="card detail" id="idea-detail"><p class="empty">Click an idea to see its statement, reviews, the matches it played with the judges' reasons, and the runs that tested it.</p></aside>
   </section>
@@ -326,17 +353,33 @@ function selectRun(id, nav = true) {
 /* ---------- tournament ---------- */
 const T = D.tournament;
 function statusChip(s, failed) { return `<span class="chip ${failed ? "failed" : esc(s)}">${failed ? "failed" : esc(s)}</span>` }
+const GROUP = { running: "running", active: "next", directed: "next", new: "next", tested: "done", revise: "revise", rejected: "rejected" };
 function drawTable() {
-  if (!T) { $("#rows").innerHTML = '<tr><td colspan="6" class="empty">No idea board yet. Run an ideation round (meta-research ideas).</td></tr>'; return }
-  const f = $("#filter").value, rows = T.ideas.filter((r) => f === "all" || r.status === f);
+  if (!T) { $("#rows-next").innerHTML = '<tr><td colspan="5" class="empty">No idea board yet. Run an ideation round (meta-research ideas).</td></tr>'; return }
   const maxE = Math.max(...T.ideas.map((r) => r.elo)), minE = Math.min(...T.ideas.map((r) => r.elo));
-  $("#tcount").textContent = `${rows.length} of ${T.ideas.length}`;
-  $("#rows").innerHTML = rows.map((r, k) => `<tr tabindex="0" data-idea="${r.id}" class="${r.id === selIdea ? "sel" : ""}">
-    <td class="num">${k + 1}</td><td style="min-width:220px"><span class="mono">${esc(r.id)}</span> ${esc(r.title)}<div class="meta">${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div></td>
-    <td class="num">${r.elo.toFixed(1)}<div class="bar" style="width:${Math.max(4, (r.elo - minE) / ((maxE - minE) || 1) * 64)}px;margin-left:auto"></div></td>
-    <td class="num">${r.wins}–${r.losses}</td><td>${statusChip(r.status, r.failed)}</td>
-    <td class="num">${r.gain == null ? "" : (r.gain >= 0 ? "+" : "") + (r.gain * 100).toFixed(1) + "%"}</td></tr>`).join("");
-  $("#rows").querySelectorAll("tr").forEach((tr) => { tr.onclick = () => selectIdea(tr.dataset.idea); tr.onkeydown = (ev) => { if (ev.key === "Enter") selectIdea(tr.dataset.idea) } });
+  const groups = { running: [], next: [], done: [], revise: [], rejected: [] };
+  for (const r of T.ideas) (groups[GROUP[r.status]] || groups.next).push(r);
+  groups.done.sort((a, b) => (b.gain ?? -1e9) - (a.gain ?? -1e9));
+  const tr = (r, cells) => `<tr tabindex="0" data-idea="${r.id}" class="${r.id === selIdea ? "sel" : ""}">${cells}</tr>`;
+  const name = (r) => `<td style="min-width:220px"><span class="mono">${esc(r.id)}</span> ${esc(r.title)}<div class="meta">${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div></td>`;
+  const elo = (r) => `<td class="num">${r.elo.toFixed(1)}<div class="bar" style="width:${Math.max(4, (r.elo - minE) / ((maxE - minE) || 1) * 64)}px;margin-left:auto"></div></td>`;
+  const wl = (r) => `<td class="num">${r.wins}–${r.losses}</td>`;
+  const gain = (r) => r.failed ? '<span class="chip failed">failed</span>' : r.gain == null ? "–" : `<span class="${r.gain >= 0 ? "pos" : "neg"}">${(r.gain >= 0 ? "+" : "") + (r.gain * 100).toFixed(1)}%</span>`;
+  const lastReview = (r) => { const v = r.reviews[r.reviews.length - 1]; return v ? esc((v.critique || "").slice(0, 220)) + ((v.critique || "").length > 220 ? "…" : "") : "" };
+  const empty = (n, text) => `<tr><td colspan="${n}" class="meta">${text}</td></tr>`;
+  $("#rows-running").innerHTML = groups.running.map((r) => { const s = r.started[r.started.length - 1] || {};
+    return tr(r, `${name(r)}<td class="mono">${esc(s.run || "")}</td><td>${esc(s.where || "")}</td><td class="num">${esc((s.at || "").replace("T", " ").slice(0, 16))}</td>${elo(r)}`) }).join("")
+    || empty(5, "Nothing running.");
+  $("#rows-next").innerHTML = groups.next.map((r, k) => tr(r, `<td class="num">${k + 1}</td>${name(r)}${elo(r)}${wl(r)}<td>${
+    r.status === "active" ? `<span class="chip pass">passed</span>` : r.status === "directed" ? `<span class="chip">directed</span>` : `<span class="chip">not reviewed</span>`}</td>`)).join("")
+    || empty(5, "No candidates: run an ideation round.");
+  $("#rows-done").innerHTML = groups.done.map((r) => tr(r, `${name(r)}<td>${r.runs.map((b) => D.runs[b] ? esc(D.runs[b].iteration + " " + D.runs[b].name) : esc(b)).join("<br>") || "–"}</td><td class="num">${gain(r)}</td>${elo(r)}${wl(r)}`)).join("")
+    || empty(5, "Nothing tested yet.");
+  $("#rows-revise").innerHTML = groups.revise.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
+  $("#rows-rejected").innerHTML = groups.rejected.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
+  for (const k of ["running", "next", "done"]) $("#n-" + k).textContent = groups[k].length;
+  $("#n-revise").textContent = `(${groups.revise.length})`; $("#n-rejected").textContent = `(${groups.rejected.length})`;
+  document.querySelectorAll("#v-tournament tbody tr[data-idea]").forEach((row) => { row.onclick = () => selectIdea(row.dataset.idea); row.onkeydown = (ev) => { if (ev.key === "Enter") selectIdea(row.dataset.idea) } });
 }
 function selectIdea(id, nav = true) {
   selIdea = id; const r = T && T.ideas.find((x) => x.id === id); if (!r) return;
@@ -353,6 +396,7 @@ function selectIdea(id, nav = true) {
     <div>${statusChip(r.status, r.failed)} <span class="chip">Elo ${r.elo.toFixed(1)}</span> <span class="chip">${r.wins}–${r.losses}</span>${r.gain != null ? ` <span class="chip tested">realized ${(r.gain >= 0 ? "+" : "") + (r.gain * 100).toFixed(1)}%</span>` : ""}</div>
     <h3>Statement</h3><div class="prose">${esc(r.statement)}</div>
     ${r.change ? `<h3>Change</h3><p>${esc(r.change)}</p>` : ""}
+    ${(r.started || []).length ? `<h3>Started</h3><p>${r.started.map((s) => `<span class="mono">${esc(s.run)}</span>${s.where ? " on " + esc(s.where) : ""} <span class="meta">${esc((s.at || "").replace("T", " ").slice(0, 16))}</span>`).join("<br>")}</p>` : ""}
     ${r.runs.length ? `<h3>Tested by</h3><p>${r.runs.map(runLink).join("<br>")}</p>` : ""}
     ${(r.parents || []).length || children ? `<h3>Idea lineage</h3><dl class="kv"><dt>parents</dt><dd>${(r.parents || []).map(ideaLink).join("<br>") || "–"}</dd><dt>children</dt><dd>${children || "–"}</dd></dl>` : ""}
     <h3>Reviews (${r.reviews.length})</h3>${reviews || '<p class="meta">none yet</p>'}
@@ -364,7 +408,6 @@ function wire(el) {
   el.querySelectorAll("[data-run]").forEach((b) => b.onclick = () => selectRun(b.dataset.run));
   el.querySelectorAll("button[data-idea]").forEach((b) => b.onclick = () => selectIdea(b.dataset.idea));
 }
-$("#filter").addEventListener("change", drawTable);
 if (T) $("#metareview").textContent = T.metareview || "No meta-review recorded yet.";
 else { $("#tab-tournament").hidden = true }
 

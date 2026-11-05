@@ -94,6 +94,25 @@ def test_status_follows_the_latest_review(tmp_path):
     assert status(board, a, tested={a}) == "tested"
 
 
+def test_a_started_idea_is_running_until_tested_and_leaves_the_tournament(tmp_path, capsys):
+    board = Board(tmp_path)
+    a, b, c = (_idea(board, x) for x in ("alpha mechanism", "beta mechanism", "gamma mechanism"))
+    for i in (a, b, c):
+        board.add_review(i, kind="initial", verdict="pass")
+    assert {m["a"] for m in schedule(board, n=6)} | {m["b"] for m in schedule(board, n=6)} >= {a}
+    board.start(a, "d11_minimal_pairs", where="mi300x-2")
+    assert status(board, a) == "running" and board.starts()[a][0]["where"] == "mi300x-2"
+    assert all(a not in (m["a"], m["b"]) for m in schedule(board, n=6))
+    assert status(board, a, tested={a}) == "tested"
+    with pytest.raises(BoardError):
+        board.start("i999", "x")
+    with pytest.raises(BoardError):
+        board.start(b, " ")
+    assert cli_main(["ideas", "start", b, "--run", "d12_slots_k8", "--where", "r2", "--run-dir", str(tmp_path)]) == 0
+    assert "running: d12_slots_k8 on r2" in capsys.readouterr().out
+    assert status(Board(tmp_path), b) == "running"
+
+
 def test_proximity_clusters_similar_ideas_and_flags_duplicates(tmp_path):
     board = Board(tmp_path)
     a = _idea(board, "synthetic causal probability questions", "generate cladder style causal questions")

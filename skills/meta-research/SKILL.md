@@ -71,7 +71,9 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    and name that idea: it skips the tournament, but its outcome still moves the Elo
    ratings. If `prepare.py` declares `EVAL_MINUTES` at or above `IDEA_GATE_MINUTES`
    (default 60), `eval` refuses a hypothesis without a board idea unless you pass
-   `--no-idea REASON`.
+   `--no-idea REASON`. When you launch the run, record
+   `meta-research ideas start <idea> --run <design> --where <host>`. The idea then shows
+   as running, leaves the tournament, and turns `tested` once its bundle lands.
 3. **Write `designs/<name>.py`**: copy a frontier design and change exactly **one
    mechanism**. Dry-run first (mandatory prototype): import the module, call
    `build()`, sanity-check params fit the envelope / pass obvious feasibility before

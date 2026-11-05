@@ -532,6 +532,9 @@ def cmd_ideas(args: argparse.Namespace) -> int:
         elif action == "standin":
             board.standin(args.name, args.bundle)
             print(f"parent {args.name} -> experience/{args.bundle}")
+        elif action == "start":
+            board.start(args.idea, args.run, where=args.where or "", note=args.note or "")
+            print(f"{args.idea} running: {args.run}" + (f" on {args.where}" if args.where else ""))
         elif action == "link":
             board.link(args.idea, args.bundle)
             print(f"{args.idea} <- experience/{args.bundle}")
@@ -1123,6 +1126,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = act("standin", "name the bundle that scored a run's model when that run's own bundle is missing or failed")
     p.add_argument("name", help="design name a hypothesis names as parent, e.g. d7_all_pools")
     p.add_argument("bundle", help="experience/ bundle id that scored its model, e.g. 029_d7_score")
+    p = act("start", "record that a run testing an idea was launched (the idea is then 'running')")
+    p.add_argument("idea")
+    p.add_argument("--run", required=True, help="the design name of the run, e.g. d11_minimal_pairs")
+    p.add_argument("--where", help="where it runs, e.g. a host name from resources.json")
+    p.add_argument("--note")
     p = act("link", "mark an evaluated bundle as the test of an idea")
     p.add_argument("idea")
     p.add_argument("bundle", help="experience/ bundle id, e.g. 012_d1_same_skill_data")
