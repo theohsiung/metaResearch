@@ -253,12 +253,17 @@ details summary { cursor: pointer; color: var(--muted) }
   <section id="v-tournament" class="grid" hidden>
     <div class="card">
       <div class="subtabs" role="tablist" aria-label="Ideas by stage">
+        <button role="tab" id="st-all" data-pane="all">All <span class="count" id="n-all"></span></button>
         <button role="tab" id="st-running" data-pane="running">Running <span class="count" id="n-running"></span></button>
         <button role="tab" id="st-next" data-pane="next">Up next <span class="count" id="n-next"></span></button>
         <button role="tab" id="st-done" data-pane="done">Done <span class="count" id="n-done"></span></button>
         <button role="tab" id="st-revise" data-pane="revise">Needs revision <span class="count" id="n-revise"></span></button>
         <button role="tab" id="st-rejected" data-pane="rejected">Rejected <span class="count" id="n-rejected"></span></button>
         <button role="tab" id="st-meta" data-pane="meta">Meta-review</button>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="all" hidden>
+        <p class="meta">Every idea, best tournament rating first, with where it stands.</p>
+        <div class="tablewrap"><table><thead><tr><th>#</th><th>Idea</th><th>Elo</th><th>W–L</th><th>Status</th><th>Gain</th></tr></thead><tbody id="rows-all"></tbody></table></div>
       </div>
       <div class="pane" role="tabpanel" data-pane="running" hidden>
         <p class="meta">Launched and waiting for results. They have left the tournament: their real outcome will rate them.</p>
@@ -390,13 +395,18 @@ function drawTable() {
     || empty(5, "Nothing tested yet.");
   $("#rows-revise").innerHTML = groups.revise.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
   $("#rows-rejected").innerHTML = groups.rejected.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
+  const LABEL = { running: "running", active: "passed", directed: "directed", new: "not reviewed", tested: "tested", revise: "revise", rejected: "rejected" };
+  $("#rows-all").innerHTML = T.ideas.map((r, k) => tr(r, `<td class="num">${k + 1}</td>${name(r)}${elo(r)}${wl(r)}<td><span class="chip ${
+    r.failed ? "failed" : r.status === "active" ? "pass" : esc(r.status)}">${r.failed ? "failed" : esc(LABEL[r.status] || r.status)}</span></td><td class="num">${r.gain == null && !r.failed ? "" : gain(r)}</td>`)).join("");
+  $("#n-all").textContent = T.ideas.length;
   for (const k of ["running", "next", "done", "revise", "rejected"]) $("#n-" + k).textContent = groups[k].length;
   document.querySelectorAll("#v-tournament tbody tr[data-idea]").forEach((row) => { row.onclick = () => selectIdea(row.dataset.idea); row.onkeydown = (ev) => { if (ev.key === "Enter") selectIdea(row.dataset.idea) } });
 }
 function selectIdea(id, nav = true) {
   selIdea = id; const r = T && T.ideas.find((x) => x.id === id); if (!r) return;
   if (nav && location.hash !== "#tournament") location.hash = "tournament";
-  if (nav) showPane(GROUP[r.status] || "next");  // the tab that lists it
+  const home = GROUP[r.status] || "next";
+  if (nav && curPane !== "all" && curPane !== home) showPane(home);  // open a tab that lists it
   const ms = T.matches.filter((m) => m.a === id || m.b === id).slice().reverse();
   const matches = ms.map((m) => { const opp = m.a === id ? m.b : m.a, won = m.winner === id;
     return `<div class="match"><span class="who ${won ? "w" : "l"}">${won ? "Won" : "Lost"}</span> vs ${ideaLink(opp)} <span class="chip">${esc(m.format || "")}</span>
@@ -421,7 +431,9 @@ function wire(el) {
   el.querySelectorAll("[data-run]").forEach((b) => b.onclick = () => selectRun(b.dataset.run));
   el.querySelectorAll("button[data-idea]").forEach((b) => b.onclick = () => selectIdea(b.dataset.idea));
 }
+let curPane = null;
 function showPane(name) {
+  curPane = name;
   document.querySelectorAll("#v-tournament .subtabs button").forEach((b) => {
     const on = b.dataset.pane === name;
     b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
@@ -436,7 +448,7 @@ document.querySelectorAll("#v-tournament .subtabs button").forEach((b, k, all) =
     if (d) { const n = all[(k + d + all.length) % all.length]; n.focus(); showPane(n.dataset.pane) }
   };
 });
-showPane(["running", "next", "done", "revise", "rejected", "meta"].includes(store.get("mr-pane")) ? store.get("mr-pane") : "next");
+showPane(["all", "running", "next", "done", "revise", "rejected", "meta"].includes(store.get("mr-pane")) ? store.get("mr-pane") : "next");
 if (T) $("#metareview").textContent = T.metareview || "No meta-review recorded yet.";
 else { $("#tab-tournament").hidden = true }
 
