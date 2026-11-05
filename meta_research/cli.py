@@ -484,7 +484,7 @@ def cmd_ideas(args: argparse.Namespace) -> int:
                 print(logfmt.dim(f"      {c['technique']}" + (f" | claim: {c['claim']}" if c["claim"] else "")))
         elif action == "add":
             e = board.add_idea(**_fields(args, ("title", "statement", "change", "origin", "strategy", "parents",
-                                                "cites", "tags")))
+                                                "cites", "tags", "gist")))
             print(logfmt.bold(f"idea {e['id']}: {e['title']}"))
             near = [(s, a if b == e["id"] else b) for (a, b), s in ib.similarity(board).items()
                     if e["id"] in (a, b) and s >= args.duplicate]
@@ -519,7 +519,8 @@ def cmd_ideas(args: argparse.Namespace) -> int:
             for row in rows:
                 real = "failed" if row["failed"] else ("" if row["gain"] is None else f"gain {row['gain']:+.4f}")
                 print(f"  {row['id']}  {row['elo']:7.1f}  {row['wins']}-{row['losses']}  {row['status']:8}"
-                      f"  {row['origin'][:3]}:{row['strategy'] or '-':12} {row['title']}  {real}")
+                      f"  {row['origin'][:3]}:{row['strategy'] or '-':12} "
+                      f"{('[' + row['gist'] + '] ') if row['gist'] else ''}{row['title']}  {real}")
         elif action == "proximity":
             graph = ib.proximity(board, threshold=args.threshold, duplicate=args.duplicate)
             if args.json:
@@ -532,6 +533,9 @@ def cmd_ideas(args: argparse.Namespace) -> int:
         elif action == "standin":
             board.standin(args.name, args.bundle)
             print(f"parent {args.name} -> experience/{args.bundle}")
+        elif action == "gist":
+            board.set_gist(args.idea, args.text)
+            print(f"{args.idea}: {args.text.strip()}")
         elif action == "start":
             board.start(args.idea, args.run, where=args.where or "", note=args.note or "")
             print(f"{args.idea} running: {args.run}" + (f" on {args.where}" if args.where else ""))
@@ -1093,8 +1097,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--file", help="JSON object with the fields below")
     for flag in ("title", "statement", "change", "strategy", "parents", "cites", "tags"):
         p.add_argument(f"--{flag}")
+    p.add_argument("--gist", help="a label of a few words naming the core mechanism, for tables")
     p.add_argument("--origin", choices=["generation", "evolution", "directed"])
     p.add_argument("--duplicate", type=float, default=0.75, help="similarity that flags a near-duplicate")
+    p = act("gist", "give an idea a short label of its core mechanism (the latest one wins)")
+    p.add_argument("idea")
+    p.add_argument("text")
     p = act("review", "record a Reflection review of an idea")
     p.add_argument("idea")
     p.add_argument("--kind", required=True,

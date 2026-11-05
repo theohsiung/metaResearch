@@ -44,6 +44,7 @@ VERDICTS = ("pass", "revise", "fail")
 #: ``directed``: a direction the user or an audit chose outside a tournament (a gap analysis, a failure found in a
 #: result). It is never judged, so it is not scheduled, but its evaluated bundle still plays reality matches.
 ORIGINS = ("generation", "evolution", "directed")
+GIST_MAX = 40  # characters: a table label, not a sentence
 #: Generation and Evolution strategies named in the paper (free text is allowed too).
 STRATEGIES = ("literature", "debate", "assumptions", "expansion",
               "grounding", "feasibility", "inspiration", "combination", "simplification", "out-of-box")
@@ -131,12 +132,15 @@ class Board:
 
     def add_idea(self, *, title: str, statement: str, change: str = "", origin: str = "generation",
                  strategy: str = "", parents: list[str] | None = None, cites: list[str] | None = None,
-                 tags: list[str] | None = None) -> dict[str, Any]:
-        """A new hypothesis. Evolution adds a new idea with ``parents``; it never edits one."""
+                 tags: list[str] | None = None, gist: str = "") -> dict[str, Any]:
+        """A new hypothesis. Evolution adds a new idea with ``parents``; it never edits one. ``gist`` is a label of
+        a few words naming its core mechanism, for tables (``set_gist`` changes it later)."""
         if not title.strip() or not statement.strip():
             raise BoardError("an idea needs a title and a statement")
         if origin not in ORIGINS:
             raise BoardError(f"origin must be one of {ORIGINS}, got {origin!r}")
+        if len(gist.strip()) > GIST_MAX:
+            raise BoardError(f"a gist is a label of a few words (at most {GIST_MAX} characters)")
         parents = list(parents or [])
         unknown = [p for p in parents if p not in self.ideas]
         if unknown:
@@ -150,7 +154,22 @@ class Board:
         return self._append({"type": "idea", "id": self._next_id("idea", "i"), "title": title.strip(),
                              "statement": statement.strip(), "change": change.strip(), "origin": origin,
                              "strategy": strategy.strip(), "parents": parents, "cites": cites,
-                             "tags": list(tags or [])})
+                             "tags": list(tags or []), "gist": gist.strip()})
+
+    def set_gist(self, idea: str, text: str) -> dict[str, Any]:
+        """Give an idea a short label of its core mechanism (the latest one wins)."""
+        self._require(idea)
+        if not text.strip():
+            raise BoardError("an empty gist")
+        if len(text.strip()) > GIST_MAX:
+            raise BoardError(f"a gist is a label of a few words (at most {GIST_MAX} characters)")
+        return self._append({"type": "gist", "idea": idea, "text": text.strip()})
+
+    def gists(self) -> dict[str, str]:
+        """Idea -> its short label: the latest ``gist`` event, else the one given when it was added."""
+        out = {i: e.get("gist", "") for i, e in self.ideas.items() if e.get("gist")}
+        out.update({e["idea"]: e["text"] for e in self.of("gist")})
+        return out
 
     def add_review(self, idea: str, *, kind: str, verdict: str, scores: dict[str, float] | None = None,
                    critique: str = "") -> dict[str, Any]:
@@ -482,10 +501,12 @@ def rank(board: Board, *, weights: dict[str, float] | None = None,
     """Every idea with rating, record, status and realized gain, best rating first."""
     real = outcomes(board, weights=weights, scores=scores)
     ratings = elo(board)
+    gists = board.gists()
     rows = []
     for i, idea in board.ideas.items():
         r = ratings[i]
-        rows.append({"id": i, "title": idea["title"], "elo": round(r["elo"], 1), "wins": r["wins"],
+        rows.append({"id": i, "title": idea["title"], "gist": gists.get(i, ""), "elo": round(r["elo"], 1),
+                     "wins": r["wins"],
                      "losses": r["losses"], "status": status(board, i, set(real)), "origin": idea["origin"],
                      "strategy": idea["strategy"], "parents": idea["parents"], "cites": idea["cites"],
                      "gain": None if i not in real or real[i]["gain"] is None else round(real[i]["gain"], 4),

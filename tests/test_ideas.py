@@ -94,6 +94,25 @@ def test_status_follows_the_latest_review(tmp_path):
     assert status(board, a, tested={a}) == "tested"
 
 
+def test_gists_label_ideas_and_the_latest_wins(tmp_path, capsys):
+    board = Board(tmp_path)
+    a = board.add_idea(title="Two-way minimal pairs", statement="flip and keep edits", gist="最小對：翻轉／保留")["id"]
+    b = _idea(board, "plain idea")
+    assert board.gists() == {a: "最小對：翻轉／保留"}
+    board.set_gist(b, "思考格放題後")
+    board.set_gist(a, "最小對（完整版）")
+    assert board.gists() == {a: "最小對（完整版）", b: "思考格放題後"}
+    assert {r["id"]: r["gist"] for r in rank(board)} == {a: "最小對（完整版）", b: "思考格放題後"}
+    with pytest.raises(BoardError):
+        board.set_gist(a, "x" * 41)
+    with pytest.raises(BoardError):
+        board.add_idea(title="t", statement="s", gist="y" * 41)
+    assert cli_main(["ideas", "gist", b, "slots after the question", "--run-dir", str(tmp_path)]) == 0
+    assert Board(tmp_path).gists()[b] == "slots after the question"
+    assert cli_main(["ideas", "rank", "--run-dir", str(tmp_path)]) == 0
+    assert "[slots after the question]" in capsys.readouterr().out
+
+
 def test_a_started_idea_is_running_until_tested_and_leaves_the_tournament(tmp_path, capsys):
     board = Board(tmp_path)
     a, b, c = (_idea(board, x) for x in ("alpha mechanism", "beta mechanism", "gamma mechanism"))

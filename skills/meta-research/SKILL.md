@@ -61,7 +61,8 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    value (see REFERENCE.md mechanism axes). Name the failure mode the diagnostic
    revealed and the single mechanism you will change to fix it. When evaluations are
    expensive, draw it from an ideation round instead (REFERENCE.md §5d):
-   - literature cards and ideas;
+   - literature cards and ideas, each idea with a `gist` (a label of a few words naming its
+     mechanism, in the user's language; `ideas gist <id> <text>` adds or changes one);
    - reviews by independent subagents;
    - an Elo tournament, plus evolution and a meta-review.
 

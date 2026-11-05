@@ -212,6 +212,8 @@ h3 { font: 600 11px/1.3 var(--body); text-transform: uppercase; letter-spacing: 
 .sections section > .meta { margin: 0 0 6px }
 .sections details summary { font-weight: 500 }
 .pos { color: var(--win); font-weight: 600 } .neg { color: var(--loss); font-weight: 600 }
+.gist { display: inline-block; font-weight: 600; color: var(--ink); background: var(--accent-soft); border-radius: 4px; padding: 0 6px }
+.gist.big { font-size: 15px; padding: 2px 8px; margin: 4px 0 6px }
 .chip.fail, .chip.rejected, .chip.failed { background: color-mix(in srgb, var(--loss) 15%, transparent); color: var(--loss) }
 .chip.revise { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent) }
 .link { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; background: none; border: 0; padding: 0; font: inherit }
@@ -335,7 +337,7 @@ function drawChart() {
 }
 function highlight() { document.querySelectorAll("svg .edge").forEach((e) => e.classList.toggle("hot", e.dataset.src === selRun || e.dataset.dst === selRun)) }
 function runLink(id) { const r = D.runs[id]; return r ? `<button class="link" data-run="${id}">${esc(r.iteration + " " + r.name)}</button>` : esc(id) }
-function ideaLink(id) { const t = D.tournament && D.tournament.ideas.find((x) => x.id === id); return t ? `<button class="link" data-idea="${id}">${esc(id)}</button> ${esc(t.title)}` : esc(id) }
+function ideaLink(id) { const t = D.tournament && D.tournament.ideas.find((x) => x.id === id); return t ? `<button class="link" data-idea="${id}">${esc(id)}</button> ${t.gist ? `<span class="gist">${esc(t.gist)}</span> ` : ""}<span class="meta">${esc(t.title)}</span>` : esc(id) }
 function selectRun(id, nav = true) {
   selRun = id; const r = D.runs[id]; if (!r) return;
   if (nav && location.hash !== "#evolution") location.hash = "evolution";
@@ -361,7 +363,7 @@ function drawTable() {
   for (const r of T.ideas) (groups[GROUP[r.status]] || groups.next).push(r);
   groups.done.sort((a, b) => (b.gain ?? -1e9) - (a.gain ?? -1e9));
   const tr = (r, cells) => `<tr tabindex="0" data-idea="${r.id}" class="${r.id === selIdea ? "sel" : ""}">${cells}</tr>`;
-  const name = (r) => `<td style="min-width:220px"><span class="mono">${esc(r.id)}</span> ${esc(r.title)}<div class="meta">${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div></td>`;
+  const name = (r) => `<td style="min-width:240px"><span class="mono">${esc(r.id)}</span> ${r.gist ? `<span class="gist">${esc(r.gist)}</span>` : esc(r.title)}<div class="meta">${r.gist ? esc(r.title) + " · " : ""}${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div></td>`;
   const elo = (r) => `<td class="num">${r.elo.toFixed(1)}<div class="bar" style="width:${Math.max(4, (r.elo - minE) / ((maxE - minE) || 1) * 64)}px;margin-left:auto"></div></td>`;
   const wl = (r) => `<td class="num">${r.wins}–${r.losses}</td>`;
   const gain = (r) => r.failed ? '<span class="chip failed">failed</span>' : r.gain == null ? "–" : `<span class="${r.gain >= 0 ? "pos" : "neg"}">${(r.gain >= 0 ? "+" : "") + (r.gain * 100).toFixed(1)}%</span>`;
@@ -392,7 +394,7 @@ function selectIdea(id, nav = true) {
       ${v.critique ? `<div class="prose" style="margin-top:4px">${esc(v.critique)}</div>` : ""}</div>`).join("");
   const cites = (r.cites || []).map((c) => T.cards[c] ? `<li><span class="mono">${esc(c)}</span> ${esc(T.cards[c].title)} <span class="meta">${esc(T.cards[c].source || "")}</span></li>` : D.runs[c] ? `<li>${runLink(c)}</li>` : `<li class="mono">${esc(c)}</li>`).join("");
   const children = T.ideas.filter((x) => (x.parents || []).includes(id)).map((x) => ideaLink(x.id)).join("<br>");
-  $("#idea-detail").innerHTML = `<div class="meta mono">${esc(r.id)} · ${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div><h2>${esc(r.title)}</h2>
+  $("#idea-detail").innerHTML = `<div class="meta mono">${esc(r.id)} · ${esc(r.origin)}${r.strategy ? ":" + esc(r.strategy) : ""}</div>${r.gist ? `<div class="gist big">${esc(r.gist)}</div>` : ""}<h2>${esc(r.title)}</h2>
     <div>${statusChip(r.status, r.failed)} <span class="chip">Elo ${r.elo.toFixed(1)}</span> <span class="chip">${r.wins}–${r.losses}</span>${r.gain != null ? ` <span class="chip tested">realized ${(r.gain >= 0 ? "+" : "") + (r.gain * 100).toFixed(1)}%</span>` : ""}</div>
     <h3>Statement</h3><div class="prose">${esc(r.statement)}</div>
     ${r.change ? `<h3>Change</h3><p>${esc(r.change)}</p>` : ""}
