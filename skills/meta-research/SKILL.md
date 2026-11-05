@@ -62,7 +62,8 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
    revealed and the single mechanism you will change to fix it. When evaluations are
    expensive, draw it from an ideation round instead (REFERENCE.md §5d):
    - literature cards and ideas, each idea with a `gist` (a label of a few words naming its
-     mechanism, in the user's language; `ideas gist <id> <text>` adds or changes one);
+     mechanism, in the board's language so it reads with the titles; `ideas gist <id> <text>`
+     adds or changes one);
    - reviews by independent subagents;
    - an Elo tournament, plus evolution and a meta-review.
 
