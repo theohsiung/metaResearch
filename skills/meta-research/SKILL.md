@@ -65,7 +65,9 @@ The domain (geometry, physics, scoring) lives entirely in `prepare.py` + `object
      mechanism, in the board's language so it reads with the titles; `ideas gist <id> <text>`
      adds or changes one);
    - reviews by independent subagents;
-   - an Elo tournament, plus evolution and a meta-review.
+   - an Elo tournament, plus evolution and a meta-review. Evolved ideas are new ideas:
+     review them and play their matches (against their parents too) before the round
+     ends; `ideas schedule` lists any idea still unreviewed.
 
    Then take the top untested idea from `meta-research ideas rank` and name it in
    hyp.json's `idea`. When the user or an audit of a result picks the direction instead,

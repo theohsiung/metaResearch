@@ -507,6 +507,10 @@ def cmd_ideas(args: argparse.Namespace) -> int:
             for m in plan:
                 print(f"  {m['a']} vs {m['b']}  [{m['format']}]  similarity {m['similarity']:.2f}, met {m['met']}x")
                 print(logfmt.dim(f"      {board.ideas[m['a']]['title']}  |  {board.ideas[m['b']]['title']}"))
+            unreviewed = [i for i in board.ideas if ib.status(board, i, tested) == "new"]
+            if unreviewed:
+                print(logfmt.yellow(f"  not reviewed yet, so not scheduled: {', '.join(unreviewed)} "
+                                    "(review them first; evolved ideas too)"))
         elif action == "match":
             board.add_match(args.a, args.b, winner=args.winner, format=args.format, rationale=args.rationale or "")
             r = ib.elo(board)
