@@ -12,6 +12,7 @@ exposes only deterministic, side-effecting-but-append-only steps:
     meta-research ideas <card|cards|add|review|schedule|match|rank|proximity|standin|link|sync|stats|digest|metareview>
     meta-research progress [--out DIR] [--run-dir DIR]
     meta-research resources <probe|check|show>
+    meta-research ui [--out FILE] | serve [--port 8765]
     meta-research init <name> [--from EXAMPLE] [--run-dir DIR]
 
 The experiment is discovered from the working directory (autoresearch style):
@@ -594,42 +595,79 @@ def cmd_trajectory(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_ui(args: argparse.Namespace) -> int:
-    """`meta-research ui` — one self-contained HTML page: trajectory per objective + the idea tournament."""
+def _ui_builder(args: argparse.Namespace):
+    """A zero-argument function returning the page data, re-reading the ledger (and --rescored) on every call.
+    Raises ValueError on bad arguments, checked once up front."""
     from .suggest import objectives_from_frontier
-    from .ui import UI_FILENAME, render_ui, ui_data
+    from .ui import ui_data
 
     run_dir = Path(args.run_dir).resolve()
-    try:
-        rescored = _load_rescored(args.rescored, run_dir)
-        weights = _weights(args.weights)
-    except (OSError, ValueError) as exc:
-        _err(str(exc))
-        return 2
+    weights = _weights(args.weights)
     refs = {}
     for item in args.ref or []:
         label, _, value = item.partition("=")
         try:
             refs[label] = float(value)
         except ValueError:
-            _err(f"--ref expects LABEL=NUMBER, got {item!r}")
-            return 2
-    objectives = list(objectives_from_frontier(run_dir) or [])
-    known = {o.name for o in objectives}
-    extra = sorted({k for v in (rescored or {}).values() for k in v} - known)
-    objectives = [Objective(k, direction="max") for k in extra] + objectives  # a rescored metric is the one to read
-    if args.objective:
-        first = [o for o in objectives if o.name == args.objective]
-        if not first:
-            _err(f"unknown objective {args.objective!r}; known: {', '.join(o.name for o in objectives)}")
-            return 2
-        objectives = first + [o for o in objectives if o.name != args.objective]
-    data = ui_data(run_dir, objectives, refs=refs, scores=rescored, weights=weights, title=args.title)
+            raise ValueError(f"--ref expects LABEL=NUMBER, got {item!r}") from None
+
+    def build() -> dict[str, Any]:
+        rescored = _load_rescored(args.rescored, run_dir)
+        objectives = list(objectives_from_frontier(run_dir) or [])
+        known = {o.name for o in objectives}
+        extra = sorted({k for v in (rescored or {}).values() for k in v} - known)
+        objectives = [Objective(k, direction="max") for k in extra] + objectives  # a rescored metric is the one to read
+        if args.objective:
+            first = [o for o in objectives if o.name == args.objective]
+            if not first:
+                raise ValueError(f"unknown objective {args.objective!r}; known: {', '.join(o.name for o in objectives)}")
+            objectives = first + [o for o in objectives if o.name != args.objective]
+        return ui_data(run_dir, objectives, refs=refs, scores=rescored, weights=weights, title=args.title)
+
+    build()  # fail fast on bad arguments
+    return build
+
+
+def cmd_ui(args: argparse.Namespace) -> int:
+    """`meta-research ui` — one self-contained HTML page: trajectory per objective + the idea tournament."""
+    from .ui import UI_FILENAME, render_ui
+
+    try:
+        data = _ui_builder(args)()
+    except (OSError, ValueError) as exc:
+        _err(str(exc))
+        return 2
+    run_dir = Path(args.run_dir).resolve()
     path = render_ui(data, Path(args.out) if args.out else run_dir / UI_FILENAME)
     t = data["tournament"]
     print(logfmt.bold(f"wrote {path}"))
-    print(logfmt.dim(f"  {len(data['runs'])} runs, {len(objectives)} objective view(s)"
+    print(logfmt.dim(f"  {len(data['runs'])} runs, {len(data['views'])} objective view(s)"
                      + (f", {len(t['ideas'])} ideas, {len(t['matches'])} matches" if t else ", no idea board")))
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    """`meta-research serve` — the research page on http://localhost:PORT, rebuilt from the ledger on every load and
+    reloaded in the browser when a result or idea-board event lands."""
+    from .ui import serve
+
+    try:
+        build = _ui_builder(args)
+    except (OSError, ValueError) as exc:
+        _err(str(exc))
+        return 2
+    run_dir = Path(args.run_dir).resolve()
+    extra = [run_dir / args.rescored] if args.rescored else []
+    print(logfmt.bold(f"serving {run_dir.name} on http://{args.host}:{args.port}/  (Ctrl-C to stop)"))
+    if args.host not in ("127.0.0.1", "localhost"):
+        print(logfmt.yellow("  warning: reachable from other machines; the page shows the whole ledger"))
+    try:
+        serve(build, run_dir, host=args.host, port=args.port, extra=extra)
+    except OSError as exc:
+        _err(f"could not serve on {args.host}:{args.port}: {exc}")
+        return 1
+    except KeyboardInterrupt:
+        pass
     return 0
 
 
@@ -1112,16 +1150,26 @@ def build_parser() -> argparse.ArgumentParser:
     add_run_dir(p_traj)
     p_traj.set_defaults(func=cmd_trajectory)
 
+    def ui_args(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--ref", action="append", help="reference line LABEL=VALUE on the trajectory (repeatable)")
+        p.add_argument("--rescored", help="JSON {bundle: {name: value}} overriding ledger scores; its names become "
+                                          "extra objectives (higher is better)")
+        p.add_argument("--weights", help="name=weight pairs for realized gains (as in `ideas rank`)")
+        p.add_argument("--title", default=None, help="page title (default: the run dir's name)")
+        p.add_argument("--objective", default=None, help="objective shown first (default: first rescored, else first)")
+        add_run_dir(p)
+
     p_ui = sub.add_parser("ui", help="write research.html: an interactive page with the trajectory and the tournament")
     p_ui.add_argument("--out", default=None, help="output HTML (default: <run dir>/research.html)")
-    p_ui.add_argument("--ref", action="append", help="reference line LABEL=VALUE on the trajectory (repeatable)")
-    p_ui.add_argument("--rescored", help="JSON {bundle: {name: value}} overriding ledger scores; its names become "
-                                         "extra objectives (higher is better)")
-    p_ui.add_argument("--weights", help="name=weight pairs for realized gains (as in `ideas rank`)")
-    p_ui.add_argument("--title", default=None, help="page title (default: the run dir's name)")
-    p_ui.add_argument("--objective", default=None, help="objective shown first (default: first rescored, else first)")
-    add_run_dir(p_ui)
+    ui_args(p_ui)
     p_ui.set_defaults(func=cmd_ui)
+
+    p_srv = sub.add_parser("serve", help="the research page on http://localhost:PORT, live: it reloads when the "
+                                         "ledger or idea board changes")
+    p_srv.add_argument("--port", type=int, default=8765)
+    p_srv.add_argument("--host", default="127.0.0.1", help="bind address (default: this machine only)")
+    ui_args(p_srv)
+    p_srv.set_defaults(func=cmd_serve)
 
     p_kg = sub.add_parser("kg", help="rebuild kg.json from the experience ledger")
     add_run_dir(p_kg)

@@ -71,12 +71,66 @@ def ui_data(run_dir: Path | str, objectives: list[Objective], *, refs: dict[str,
             "runs": runs, "views": views, "tournament": tournament}
 
 
-def render_ui(data: dict[str, Any], out: Path | str) -> Path:
-    out = Path(out)
+def render_page(data: dict[str, Any], live: bool = False) -> str:
     blob = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     page = TEMPLATE.replace("__TITLE__", _esc(f"{data['title']} research")).replace("__DATA__", blob)
-    out.write_text(page, encoding="utf-8")
+    return page.replace("__LIVE__", "true" if live else "false")
+
+
+def render_ui(data: dict[str, Any], out: Path | str) -> Path:
+    out = Path(out)
+    out.write_text(render_page(data), encoding="utf-8")
     return out
+
+
+def ledger_stamp(run_dir: Path | str, extra: list[Path] | None = None) -> str:
+    """Changes whenever a result, bundle or idea-board event lands: the newest mtime of the ledger files."""
+    run_dir = Path(run_dir)
+    paths = [run_dir / "results.tsv", run_dir / "frontier.json", run_dir / ib.BOARD_DIRNAME / ib.BOARD_FILENAME,
+             run_dir / EXPERIENCE_DIRNAME, *(extra or [])]
+    if (run_dir / EXPERIENCE_DIRNAME).is_dir():
+        paths += list((run_dir / EXPERIENCE_DIRNAME).iterdir())
+    stamps = [p.stat().st_mtime_ns for p in paths if p.exists()]
+    return str(max(stamps, default=0))
+
+
+def serve(build: Any, run_dir: Path | str, *, host: str = "127.0.0.1", port: int = 8765,
+          extra: list[Path] | None = None, on_ready: Any = None) -> None:
+    """Serve the page on http://host:port/, rebuilt from the ledger on every load. ``build()`` returns ui_data.
+    ``/stamp`` answers the ledger stamp; the page polls it and reloads itself when the ledger changes."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - http.server's name
+            path = self.path.split("?")[0]
+            if path == "/stamp":
+                body, kind = ledger_stamp(run_dir, extra).encode(), "text/plain"
+            elif path in ("/", "/index.html"):
+                try:
+                    body, kind = render_page(build(), live=True).encode("utf-8"), "text/html; charset=utf-8"
+                except Exception as exc:  # noqa: BLE001 - show the error in the browser, keep serving
+                    self.send_error(500, f"could not build the page: {exc}")
+                    return
+            else:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: Any) -> None:  # quiet: the page polls every few seconds
+            pass
+
+    server = ThreadingHTTPServer((host, port), Handler)
+    if on_ready:
+        on_ready(server)  # e.g. to learn the port when port=0, or to shut it down from a test
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
 
 
 def _esc(s: str) -> str:
@@ -315,8 +369,28 @@ if (T) $("#metareview").textContent = T.metareview || "No meta-review recorded y
 else { $("#tab-tournament").hidden = true }
 
 route(); drawChart(); drawTable();
-if (T && T.ideas.length) { const top = T.ideas.find((x) => x.status === "active") || T.ideas[0]; selectIdea(top.id, false) }
+const kept = (k) => { try { return sessionStorage.getItem(k) } catch (e) { return null } };
+const keep = (k, v) => { try { sessionStorage.setItem(k, v) } catch (e) {} };
+const ideaPick = T && (T.ideas.find((x) => x.id === kept("mr-idea")) || T.ideas.find((x) => x.status === "active") || T.ideas[0]);
+if (ideaPick) selectIdea(ideaPick.id, false);
 const last = D.views[0] && D.views[0].points.filter((p) => p.value != null).slice(-1)[0];
-if (last) selectRun(last.id, false);
+const runPick = D.runs[kept("mr-run")] ? kept("mr-run") : last && last.id;
+if (runPick) selectRun(runPick, false);
+const _selRun = selectRun, _selIdea = selectIdea;
+selectRun = (id, nav) => { keep("mr-run", id); _selRun(id, nav) };
+selectIdea = (id, nav) => { keep("mr-idea", id); _selIdea(id, nav) };
+const LIVE = __LIVE__;
+if (LIVE) {
+  let stamp = null;
+  const poll = async () => {
+    try {
+      const s = await (await fetch("/stamp", { cache: "no-store" })).text();
+      if (stamp !== null && s !== stamp) location.reload();
+      stamp = s;
+    } catch (e) {}
+  };
+  poll(); setInterval(poll, 10000);
+  $("#gen").textContent += " · live";
+}
 </script>
 """

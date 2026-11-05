@@ -83,6 +83,56 @@ def test_without_board(lab):  # noqa: F811
     assert ui_data(run, [ACC])["tournament"] is None
 
 
+def test_serve_rebuilds_and_reloads_on_ledger_change(lab):  # noqa: F811
+    import threading
+    import time
+    import urllib.request
+
+    from meta_research import ui
+
+    run, add = lab
+    _ledger(add)
+    b = _board(run)
+    calls = []
+
+    def build():
+        calls.append(1)
+        return ui_data(run, [ACC], title="lab")
+
+    ready = threading.Event()
+    box = {}
+
+    def on_ready(server):
+        box["server"] = server
+        ready.set()
+
+    threading.Thread(target=ui.serve, args=(build, run), kwargs={"port": 0, "on_ready": on_ready},
+                     daemon=True).start()
+    assert ready.wait(5)
+    base = f"http://127.0.0.1:{box['server'].server_address[1]}"
+    page = urllib.request.urlopen(base + "/").read().decode()
+    assert "const LIVE = true" in page and "wider fins" in page and calls
+    s1 = urllib.request.urlopen(base + "/stamp").read().decode()
+    time.sleep(0.01)
+    b.add_review("i002", kind="initial", verdict="revise", critique="later")
+    s2 = urllib.request.urlopen(base + "/stamp").read().decode()
+    assert s1 != s2
+    assert urllib.request.urlopen(base + "/").read().decode().count("later") >= 1
+    try:
+        urllib.request.urlopen(base + "/nope")
+        raise AssertionError("expected 404")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    box["server"].shutdown()
+
+
+def test_static_page_is_not_live(lab, tmp_path):  # noqa: F811
+    run, add = lab
+    _ledger(add)
+    html = render_ui(ui_data(run, [ACC]), tmp_path / "r.html").read_text(encoding="utf-8")
+    assert "const LIVE = false" in html
+
+
 def test_cli(lab, capsys):  # noqa: F811
     run, add = lab
     _ledger(add)
