@@ -134,6 +134,27 @@ def test_check_finds_missing_path_and_lost_exec_bit(tmp_path: Path) -> None:
     assert all(g for _, _, g, _ in resources.run_check(dict(host, required_paths=[str(ok)])))
 
 
+def test_refused_ssh_is_retried_then_reported(monkeypatch) -> None:
+    import subprocess
+
+    calls = []
+
+    def fake(cmd, **kw):
+        calls.append(cmd)
+        ok = len(calls) >= 3
+        return subprocess.CompletedProcess(cmd, 0 if ok else 255, stdout="path ok /x\n### end\n" if ok else "",
+                                           stderr="" if ok else "ssh: connect to host h port 22: Connection refused")
+
+    monkeypatch.setattr(resources.subprocess, "run", fake)
+    monkeypatch.setattr(resources.time, "sleep", lambda s: None)
+    host = {"name": "r", "ssh": "root@h", "required_paths": ["/x"]}
+    assert resources.run_check(host) == [("path", "/x", True, "ok")] and len(calls) == 3
+    calls.clear()
+    monkeypatch.setattr(resources.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
+        cmd, 255, stdout="", stderr="Connection refused"))
+    assert resources.run_check(host, tries=2) == [("reach", "root@h", False, "Connection refused")]
+
+
 def test_check_disk_threshold() -> None:
     rows = resources.parse_check("disk / 1048576\n### end\n", {"min_free_gb": 2})
     assert rows == [("free disk", "/", False, "1.0 GB free (need 2)")]

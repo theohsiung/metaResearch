@@ -24,6 +24,7 @@ import datetime as dt
 import json
 import shlex
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -50,14 +51,16 @@ def probe_script(paths: list[str] | None = None) -> str:
     return PROBE_SCRIPT.replace("{paths}", " ".join(shlex.quote(p) for p in (paths or ["/"])))
 
 
-def run_probe(host: str | None = None, paths: list[str] | None = None, timeout: int = 60) -> str:
-    """Run the probe locally (``host`` None) or over one ``ssh -o BatchMode=yes`` call; return its raw output."""
+def run_probe(host: str | None = None, paths: list[str] | None = None, timeout: int = 60, tries: int = 4,
+              wait: float = 5.0) -> str:
+    """Run the probe locally (``host`` None) or over one ``ssh -o BatchMode=yes`` call (a refused connection is
+    retried); return its raw output."""
     script = probe_script(paths)
     if host:
         cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host, "bash -s"]
     else:
         cmd = ["bash", "-s"]
-    out = subprocess.run(cmd, input=script, capture_output=True, text=True, timeout=timeout, check=False)
+    out = _run(cmd, script, timeout, tries if host else 1, wait)
     if "### end" not in out.stdout:
         raise RuntimeError(f"probe of {host or 'local'} failed: {out.stderr.strip() or 'no output'}")
     return out.stdout
@@ -317,12 +320,23 @@ def parse_check(raw: str, host: dict[str, Any]) -> list[tuple[str, str, bool, st
     return rows
 
 
-def run_check(host: dict[str, Any], timeout: int = 60) -> list[tuple[str, str, bool, str]]:
+def _run(cmd: list[str], script: str, timeout: int, tries: int, wait: float) -> subprocess.CompletedProcess[str]:
+    """Run a probe script; retry a failed connection (an sshd under a scan refuses new connections for a while)."""
+    for attempt in range(tries):
+        out = subprocess.run(cmd, input=script, capture_output=True, text=True, timeout=timeout, check=False)
+        if "### end" in out.stdout or out.returncode != 255 or attempt == tries - 1:
+            return out
+        time.sleep(wait * (attempt + 1))
+    return out
+
+
+def run_check(host: dict[str, Any], timeout: int = 60, tries: int = 4,
+              wait: float = 5.0) -> list[tuple[str, str, bool, str]]:
     script = check_script(host)
     cmd = (["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", host["ssh"], "bash -s"]
            if host.get("ssh") else ["bash", "-s"])
     try:
-        out = subprocess.run(cmd, input=script, capture_output=True, text=True, timeout=timeout, check=False)
+        out = _run(cmd, script, timeout, tries if host.get("ssh") else 1, wait)
     except subprocess.TimeoutExpired:
         return [("reach", host.get("ssh") or "local", False, "timed out")]
     if "### end" not in out.stdout:
