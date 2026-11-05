@@ -206,11 +206,13 @@ h3 { font: 600 11px/1.3 var(--body); text-transform: uppercase; letter-spacing: 
 .chip.tested, .chip.pass { background: var(--accent-soft); color: var(--accent) }
 .chip.active { background: var(--soft); color: var(--ink) }
 .chip.running { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn) }
-.sections { display: flex; flex-direction: column; gap: 22px }
-.sections h2 { display: flex; align-items: baseline; gap: 8px }
-.sections .count { font: 600 12px var(--mono); color: var(--muted); background: var(--soft); border-radius: 10px; padding: 1px 8px }
-.sections section > .meta { margin: 0 0 6px }
-.sections details summary { font-weight: 500 }
+.subtabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin: -4px 0 12px }
+.subtabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px; color: var(--muted); font-weight: 500 }
+.subtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.subtabs button:hover { color: var(--ink) }
+.subtabs .count { font: 600 11px var(--mono); color: var(--muted); background: var(--soft); border-radius: 10px; padding: 1px 7px; margin-left: 4px }
+.subtabs button[aria-selected="true"] .count { background: var(--accent-soft); color: var(--accent) }
+.pane > .meta { margin: 0 0 8px }
 .pos { color: var(--win); font-weight: 600 } .neg { color: var(--loss); font-weight: 600 }
 .gist { display: inline-block; font-weight: 600; color: var(--ink); background: var(--accent-soft); border-radius: 4px; padding: 0 6px }
 .gist.big { font-size: 15px; padding: 2px 8px; margin: 4px 0 6px }
@@ -249,27 +251,36 @@ details summary { cursor: pointer; color: var(--muted) }
     <aside class="card detail" id="run-detail"><p class="empty">Click a point to see that candidate: its scores, the change it made, its lineage and its hypothesis.</p></aside>
   </section>
   <section id="v-tournament" class="grid" hidden>
-    <div class="card sections">
-      <section>
-        <h2>Running <span class="count" id="n-running"></span></h2>
+    <div class="card">
+      <div class="subtabs" role="tablist" aria-label="Ideas by stage">
+        <button role="tab" id="st-running" data-pane="running">Running <span class="count" id="n-running"></span></button>
+        <button role="tab" id="st-next" data-pane="next">Up next <span class="count" id="n-next"></span></button>
+        <button role="tab" id="st-done" data-pane="done">Done <span class="count" id="n-done"></span></button>
+        <button role="tab" id="st-revise" data-pane="revise">Needs revision <span class="count" id="n-revise"></span></button>
+        <button role="tab" id="st-rejected" data-pane="rejected">Rejected <span class="count" id="n-rejected"></span></button>
+        <button role="tab" id="st-meta" data-pane="meta">Meta-review</button>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="running" hidden>
         <p class="meta">Launched and waiting for results. They have left the tournament: their real outcome will rate them.</p>
         <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Run</th><th>Where</th><th>Started</th><th>Elo</th></tr></thead><tbody id="rows-running"></tbody></table></div>
-      </section>
-      <section>
-        <h2>Up next <span class="count" id="n-next"></span></h2>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="next" hidden>
         <p class="meta">Not started yet, best tournament rating first. Reviewed ones passed; unreviewed and directed ones are marked.</p>
         <div class="tablewrap"><table><thead><tr><th>#</th><th>Idea</th><th>Elo</th><th>W–L</th><th>Reviews</th></tr></thead><tbody id="rows-next"></tbody></table></div>
-      </section>
-      <section>
-        <h2>Done <span class="count" id="n-done"></span></h2>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="done" hidden>
         <p class="meta">Tested. The gain is the realized change of the tested run over its parent.</p>
         <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Tested by</th><th>Gain</th><th>Elo</th><th>W–L</th></tr></thead><tbody id="rows-done"></tbody></table></div>
-      </section>
-      <details><summary>Needs revision <span id="n-revise"></span></summary>
-        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>What the reviewers asked</th></tr></thead><tbody id="rows-revise"></tbody></table></div></details>
-      <details><summary>Rejected <span id="n-rejected"></span></summary>
-        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>Why</th></tr></thead><tbody id="rows-rejected"></tbody></table></div></details>
-      <details><summary>Latest meta-review</summary><div class="prose" id="metareview"></div></details>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="revise" hidden>
+        <p class="meta">Reviewers found them fixable but not testable as stated; the last review says what to change.</p>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>What the reviewers asked</th></tr></thead><tbody id="rows-revise"></tbody></table></div>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="rejected" hidden>
+        <p class="meta">A wrong premise or a broken rule, per the last review.</p>
+        <div class="tablewrap"><table><thead><tr><th>Idea</th><th>Elo</th><th>Why</th></tr></thead><tbody id="rows-rejected"></tbody></table></div>
+      </div>
+      <div class="pane" role="tabpanel" data-pane="meta" hidden><div class="prose" id="metareview"></div></div>
     </div>
     <aside class="card detail" id="idea-detail"><p class="empty">Click an idea to see its statement, reviews, the matches it played with the judges' reasons, and the runs that tested it.</p></aside>
   </section>
@@ -379,13 +390,13 @@ function drawTable() {
     || empty(5, "Nothing tested yet.");
   $("#rows-revise").innerHTML = groups.revise.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
   $("#rows-rejected").innerHTML = groups.rejected.map((r) => tr(r, `${name(r)}${elo(r)}<td class="meta">${lastReview(r)}</td>`)).join("") || empty(3, "None.");
-  for (const k of ["running", "next", "done"]) $("#n-" + k).textContent = groups[k].length;
-  $("#n-revise").textContent = `(${groups.revise.length})`; $("#n-rejected").textContent = `(${groups.rejected.length})`;
+  for (const k of ["running", "next", "done", "revise", "rejected"]) $("#n-" + k).textContent = groups[k].length;
   document.querySelectorAll("#v-tournament tbody tr[data-idea]").forEach((row) => { row.onclick = () => selectIdea(row.dataset.idea); row.onkeydown = (ev) => { if (ev.key === "Enter") selectIdea(row.dataset.idea) } });
 }
 function selectIdea(id, nav = true) {
   selIdea = id; const r = T && T.ideas.find((x) => x.id === id); if (!r) return;
   if (nav && location.hash !== "#tournament") location.hash = "tournament";
+  if (nav) showPane(GROUP[r.status] || "next");  // the tab that lists it
   const ms = T.matches.filter((m) => m.a === id || m.b === id).slice().reverse();
   const matches = ms.map((m) => { const opp = m.a === id ? m.b : m.a, won = m.winner === id;
     return `<div class="match"><span class="who ${won ? "w" : "l"}">${won ? "Won" : "Lost"}</span> vs ${ideaLink(opp)} <span class="chip">${esc(m.format || "")}</span>
@@ -410,6 +421,22 @@ function wire(el) {
   el.querySelectorAll("[data-run]").forEach((b) => b.onclick = () => selectRun(b.dataset.run));
   el.querySelectorAll("button[data-idea]").forEach((b) => b.onclick = () => selectIdea(b.dataset.idea));
 }
+function showPane(name) {
+  document.querySelectorAll("#v-tournament .subtabs button").forEach((b) => {
+    const on = b.dataset.pane === name;
+    b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll("#v-tournament .pane").forEach((p) => { p.hidden = p.dataset.pane !== name });
+  store.set("mr-pane", name);
+}
+document.querySelectorAll("#v-tournament .subtabs button").forEach((b, k, all) => {
+  b.onclick = () => showPane(b.dataset.pane);
+  b.onkeydown = (ev) => {  // arrow keys move between tabs
+    const d = ev.key === "ArrowRight" ? 1 : ev.key === "ArrowLeft" ? -1 : 0;
+    if (d) { const n = all[(k + d + all.length) % all.length]; n.focus(); showPane(n.dataset.pane) }
+  };
+});
+showPane(["running", "next", "done", "revise", "rejected", "meta"].includes(store.get("mr-pane")) ? store.get("mr-pane") : "next");
 if (T) $("#metareview").textContent = T.metareview || "No meta-review recorded yet.";
 else { $("#tab-tournament").hidden = true }
 
